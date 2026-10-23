@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+<testsuite name="pytest" errors="0" failures="0" skipped="1" tests="6" time="0.059" timestamp="2026-10-20T09:12:00Z" hostname="runner">
+  <testcase classname="tests.test_pricing" name="test_discount_applies" time="0.012" file="tests/test_pricing.py" line="50">
+  </testcase>
+  <testcase classname="tests.test_pricing" name="test_tax_rounding" time="0.004" file="tests/test_pricing.py" line="69">
+  </testcase>
+  <testcase classname="tests.test_pricing" name="test_negative_quantity_rejected" time="0.003" file="tests/test_pricing.py" line="68">
+  </testcase>
+  <testcase classname="tests.test_inventory" name="test_restock_updates_count" time="0.031" file="tests/test_inventory.py" line="56">
+  </testcase>
+  <testcase classname="tests.test_inventory" name="test_oversell_blocked" time="0.009" file="tests/test_inventory.py" line="48">
+  </testcase>
+  <testcase classname="tests.test_inventory" name="test_skip_legacy_sku" time="0.000" file="tests/test_inventory.py" line="41">
+    <skipped type="pytest.skip" message="legacy sku retired"/>
+  </testcase>
+</testsuite>
+</testsuites>

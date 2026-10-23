@@ -1,0 +1,219 @@
+{
+  "reportFormat": "CTRF",
+  "specVersion": "0.2.0",
+  "reportId": "89ad6b1d-3312-489b-8210-3f2a54eae7aa",
+  "timestamp": "2026-10-23T06:02:51.568Z",
+  "generatedBy": "playwright-ctrf-json-reporter",
+  "results": {
+    "tool": {
+      "name": "playwright",
+      "version": "1.64.1"
+    },
+    "summary": {
+      "tests": 6,
+      "passed": 5,
+      "failed": 0,
+      "pending": 0,
+      "skipped": 1,
+      "other": 0,
+      "start": 1792735371887,
+      "stop": 1792735375543,
+      "duration": 3656,
+      "suites": 5
+    },
+    "tests": [
+      {
+        "testId": "d748ac400d08b85935ef-40799f2285222d93dc85",
+        "executionId": "99062e3f-3776-49cd-8fe2-9caf57c1b8a2",
+        "attemptId": "4f31d795-9a7c-41e0-bae8-2aa8a4936a4b",
+        "name": "logs in with a valid password",
+        "status": "passed",
+        "duration": 604,
+        "start": 1792735373289,
+        "stop": 1792735373893,
+        "rawStatus": "passed",
+        "tags": [],
+        "type": "e2e",
+        "filePath": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests/auth.spec.ts",
+        "retries": 0,
+        "flaky": false,
+        "steps": [],
+        "suite": [
+          "chromium",
+          "auth.spec.ts",
+          "auth"
+        ],
+        "attachments": [
+          {
+            "attachmentId": "4a6ea148-084e-40f7-98d3-ad26c0410224",
+            "name": "trace",
+            "contentType": "application/zip",
+            "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/auth-auth-logs-in-with-a-valid-password-chromium/trace.zip"
+          }
+        ],
+        "stdout": [],
+        "stderr": []
+      },
+      {
+        "testId": "d748ac400d08b85935ef-2474d353b2e57ce5244d",
+        "executionId": "c2adbfb5-a266-4091-9bfb-d8751e093f0c",
+        "attemptId": "831bee03-8c6c-4b37-bd73-1615fc9c4afc",
+        "name": "rejects a bad password",
+        "status": "passed",
+        "duration": 332,
+        "start": 1792735374311,
+        "stop": 1792735374643,
+        "rawStatus": "passed",
+        "tags": [],
+        "type": "e2e",
+        "filePath": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests/auth.spec.ts",
+        "retries": 0,
+        "flaky": false,
+        "steps": [],
+        "suite": [
+          "chromium",
+          "auth.spec.ts",
+          "auth"
+        ],
+        "attachments": [
+          {
+            "attachmentId": "37ed7476-88c2-4597-b72f-58eaf2c5dd86",
+            "name": "trace",
+            "contentType": "application/zip",
+            "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/auth-auth-rejects-a-bad-password-chromium/trace.zip"
+          }
+        ],
+        "stdout": [],
+        "stderr": []
+      },
+      {
+        "testId": "25ab1bfc84c57e3e3a45-1f4c73a7ae45059923ac",
+        "executionId": "fcdae603-5d7e-4c18-939d-758e65d49e56",
+        "attemptId": "ac278a50-0bf0-4e2b-9f57-360b3c5b521c",
+        "name": "adds an item to the cart",
+        "status": "passed",
+        "duration": 668,
+        "start": 1792735373413,
+        "stop": 1792735374081,
+        "rawStatus": "passed",
+        "tags": [],
+        "type": "e2e",
+        "filePath": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests/checkout.spec.ts",
+        "retries": 0,
+        "flaky": false,
+        "steps": [],
+        "suite": [
+          "chromium",
+          "checkout.spec.ts",
+          "checkout"
+        ],
+        "attachments": [
+          {
+            "attachmentId": "759933db-9dca-44dc-8044-60db416ea43b",
+            "name": "trace",
+            "contentType": "application/zip",
+            "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/checkout-checkout-adds-an-item-to-the-cart-chromium/trace.zip"
+          }
+        ],
+        "stdout": [],
+        "stderr": []
+      },
+      {
+        "testId": "25ab1bfc84c57e3e3a45-86ba633ff6ffaf9156f3",
+        "executionId": "8cb89378-345b-47dd-84b4-3de501cc36b5",
+        "attemptId": "20d19919-9a15-4550-a710-31c2f3561522",
+        "name": "shows the total",
+        "status": "passed",
+        "duration": 370,
+        "start": 1792735374568,
+        "stop": 1792735374938,
+        "rawStatus": "passed",
+        "tags": [],
+        "type": "e2e",
+        "filePath": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests/checkout.spec.ts",
+        "retries": 0,
+        "flaky": false,
+        "steps": [],
+        "suite": [
+          "chromium",
+          "checkout.spec.ts",
+          "checkout"
+        ],
+        "attachments": [
+          {
+            "attachmentId": "0dc8bc46-0d71-427e-88bd-9c9e28c7412a",
+            "name": "trace",
+            "contentType": "application/zip",
+            "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/checkout-checkout-shows-the-total-chromium/trace.zip"
+          }
+        ],
+        "stdout": [],
+        "stderr": []
+      },
+      {
+        "testId": "25ab1bfc84c57e3e3a45-d78cf92e1d9b3c7d0711",
+        "executionId": "f11ce93e-f9df-4f17-96c8-972836a32e70",
+        "attemptId": "6ff38eee-26ec-49ce-a975-44080ee619e2",
+        "name": "applies a discount code",
+        "status": "passed",
+        "duration": 285,
+        "start": 1792735375023,
+        "stop": 1792735375308,
+        "rawStatus": "passed",
+        "tags": [],
+        "type": "e2e",
+        "filePath": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests/checkout.spec.ts",
+        "retries": 0,
+        "flaky": false,
+        "steps": [],
+        "suite": [
+          "chromium",
+          "checkout.spec.ts",
+          "checkout"
+        ],
+        "attachments": [
+          {
+            "attachmentId": "e222cc52-f747-4736-87c5-1faf44c6bb19",
+            "name": "trace",
+            "contentType": "application/zip",
+            "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/checkout-checkout-applies-a-discount-code-chromium/trace.zip"
+          }
+        ],
+        "stdout": [],
+        "stderr": []
+      },
+      {
+        "testId": "25ab1bfc84c57e3e3a45-fb436dc4a093922883df",
+        "executionId": "0b02713d-0d21-4a6d-81f6-0d547478f555",
+        "attemptId": "588d0a7f-d375-41e1-9e7c-539483ad3f45",
+        "name": "ships internationally",
+        "status": "skipped",
+        "duration": 0,
+        "start": 1792735375378,
+        "stop": 1792735375378,
+        "rawStatus": "skipped",
+        "tags": [],
+        "type": "e2e",
+        "filePath": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests/checkout.spec.ts",
+        "retries": 0,
+        "flaky": false,
+        "steps": [],
+        "suite": [
+          "chromium",
+          "checkout.spec.ts",
+          "checkout"
+        ],
+        "attachments": [
+          {
+            "attachmentId": "d1681109-31e9-4e49-8d13-ad5366738fe4",
+            "name": "trace",
+            "contentType": "application/zip",
+            "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/checkout-checkout-ships-internationally-chromium/trace.zip"
+          }
+        ],
+        "stdout": [],
+        "stderr": []
+      }
+    ]
+  }
+}

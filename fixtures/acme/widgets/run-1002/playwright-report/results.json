@@ -1,0 +1,405 @@
+{
+  "config": {
+    "argv": [
+      "/home/ben/.local/share/mise/installs/node/24.19.0/bin/node",
+      "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/node_modules/.bin/playwright",
+      "test"
+    ],
+    "configFile": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/playwright.config.ts",
+    "rootDir": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 2
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results",
+        "repeatEach": 1,
+        "retries": 1,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results",
+        "repeatEach": 1,
+        "retries": 1,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "name": "chromium",
+        "testDir": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests",
+        "snapshotDir": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests",
+        "testIgnore": [],
+        "testMatch": "**/*.@(spec|test).?(c|m)[jt]s?(x)",
+        "timeout": 30000,
+        "use": {
+          "trace": "on",
+          "screenshot": "only-on-failure",
+          "browserName": "chromium"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "chromium"
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "html",
+        {
+          "outputFolder": "playwright-report",
+          "open": "never"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "results.json"
+        }
+      ],
+      [
+        "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/node_modules/playwright-ctrf-json-reporter/dist/index.cjs",
+        {
+          "outputDir": "playwright-report",
+          "outputFile": "ctrf-report.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.1",
+    "workers": 2,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "auth.spec.ts",
+      "file": "auth.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "auth",
+          "file": "auth.spec.ts",
+          "line": 2,
+          "column": 6,
+          "specs": [
+            {
+              "title": "logs in with a valid password",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 604,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-23T06:02:53.289Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/auth-auth-logs-in-with-a-valid-password-chromium/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d748ac400d08b85935ef-40799f2285222d93dc85",
+              "file": "auth.spec.ts",
+              "line": 3,
+              "column": 7
+            },
+            {
+              "title": "rejects a bad password",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 332,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-23T06:02:54.311Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/auth-auth-rejects-a-bad-password-chromium/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d748ac400d08b85935ef-2474d353b2e57ce5244d",
+              "file": "auth.spec.ts",
+              "line": 7,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "checkout.spec.ts",
+      "file": "checkout.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "checkout",
+          "file": "checkout.spec.ts",
+          "line": 2,
+          "column": 6,
+          "specs": [
+            {
+              "title": "adds an item to the cart",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 668,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-23T06:02:53.413Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/checkout-checkout-adds-an-item-to-the-cart-chromium/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "25ab1bfc84c57e3e3a45-1f4c73a7ae45059923ac",
+              "file": "checkout.spec.ts",
+              "line": 3,
+              "column": 7
+            },
+            {
+              "title": "shows the total",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 370,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-23T06:02:54.568Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/checkout-checkout-shows-the-total-chromium/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "25ab1bfc84c57e3e3a45-86ba633ff6ffaf9156f3",
+              "file": "checkout.spec.ts",
+              "line": 8,
+              "column": 7
+            },
+            {
+              "title": "applies a discount code",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 285,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-23T06:02:55.023Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/checkout-checkout-applies-a-discount-code-chromium/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "25ab1bfc84c57e3e3a45-d78cf92e1d9b3c7d0711",
+              "file": "checkout.spec.ts",
+              "line": 12,
+              "column": 7
+            },
+            {
+              "title": "ships internationally",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests/checkout.spec.ts",
+                        "line": 16,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "expectedStatus": "skipped",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-23T06:02:55.378Z",
+                      "annotations": [
+                        {
+                          "type": "skip",
+                          "location": {
+                            "file": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests/checkout.spec.ts",
+                            "line": 16,
+                            "column": 8
+                          }
+                        }
+                      ],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/checkout-checkout-ships-internationally-chromium/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "25ab1bfc84c57e3e3a45-fb436dc4a093922883df",
+              "file": "checkout.spec.ts",
+              "line": 16,
+              "column": 8
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-23T06:02:51.571Z",
+    "duration": 3918.2329999999993,
+    "expected": 5,
+    "skipped": 1,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

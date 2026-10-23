@@ -1,0 +1,13 @@
+{
+  "runId": "run-1002",
+  "workflow": "tests",
+  "branch": "main",
+  "commit": "e4f5a6b",
+  "timestamp": "2026-10-22T14:40:00Z",
+  "buildUrl": "https://github.com/acme/widgets/actions/runs/1002",
+  "environment": "production",
+  "tags": [
+    "smoke",
+    "nightly"
+  ]
+}

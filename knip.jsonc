@@ -1,0 +1,30 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/**/*.{mjs,ts}"],
+      "project": ["scripts/**/*.{mjs,ts}", "eslint-rules/**/*.{mjs,mts}", "*.config.mjs"],
+    },
+    "packages/schema": {
+      "entry": ["test/**/*.test.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"],
+    },
+    "packages/adapters": {
+      "entry": ["test/**/*.test.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"],
+    },
+    "packages/ui": {
+      "project": ["src/**/*.{ts,tsx}"],
+      // The theme imports the fonts by path from CSS, which knip does not follow.
+      "ignoreDependencies": ["@fontsource/cormorant-garamond", "@fontsource/fragment-mono"],
+    },
+    "packages/app": {
+      "entry": ["src/index.ts", "test/**/*.test.ts"],
+      "project": ["src/**/*.{ts,tsx}", "test/**/*.ts"],
+    },
+  },
+  "include": ["files", "exports", "dependencies", "unlisted", "binaries", "unresolved"],
+  "ignoreFiles": ["eslint-rules/architecture/index.d.mts", "eslint-rules/effect/index.d.mts"],
+  "ignoreExportsUsedInFile": true,
+  "treatConfigHintsAsErrors": true,
+}

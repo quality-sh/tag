@@ -1,0 +1,25 @@
+{
+  "name": "@quality-sh/verdict-app",
+  "version": "0.0.1",
+  "type": "module",
+  "dependencies": {
+    "@effect/atom-react": "4.0.6",
+    "@effect/platform-bun": "^4.0.6",
+    "@quality-sh/verdict-adapters": "workspace:*",
+    "@quality-sh/verdict-schema": "workspace:*",
+    "effect": "^4.0.6",
+    "fflate": "^0.8.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "@quality-sh/verdict-ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@stylexjs/unplugin": "^0.19.1",
+    "@vitejs/plugin-react": "^6.1.2",
+    "vite": "^8.3.5"
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite"
+  }
+}

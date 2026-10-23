@@ -1,0 +1,51 @@
+[
+  {
+    "kind": "release",
+    "key": "v2.3.0",
+    "commit": "a1b2c3d",
+    "branch": "main",
+    "timestamp": "2026-10-20T10:00:00Z",
+    "title": "Checkout rewrite",
+    "url": "https://github.com/acme/widgets/releases/tag/v2.3.0",
+    "meta": {
+      "prerelease": false
+    }
+  },
+  {
+    "kind": "release",
+    "key": "v2.4.0",
+    "commit": "e4f5a6b",
+    "branch": "main",
+    "timestamp": "2026-10-22T15:00:00Z",
+    "title": "Payments v2",
+    "url": "https://github.com/acme/widgets/releases/tag/v2.4.0",
+    "meta": {
+      "prerelease": false
+    }
+  },
+  {
+    "kind": "pull_request",
+    "key": "#42",
+    "commit": "c0ffee1",
+    "branch": "feat/checkout-retry",
+    "timestamp": "2026-10-23T07:50:00Z",
+    "title": "Retry checkout on 5xx",
+    "url": "https://github.com/acme/widgets/pull/42",
+    "meta": {
+      "base": "main",
+      "author": "jo"
+    }
+  },
+  {
+    "kind": "deployment",
+    "key": "production",
+    "commit": "e4f5a6b",
+    "branch": "main",
+    "timestamp": "2026-10-22T15:30:00Z",
+    "title": null,
+    "url": null,
+    "meta": {
+      "environment": "production"
+    }
+  }
+]

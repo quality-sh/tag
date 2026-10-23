@@ -1,0 +1,345 @@
+{
+  "testRunData": {
+    "testFile": "tests/test_support_bot.py",
+    "testCases": [
+      {
+        "name": "answers refund policy question",
+        "input": "What is your refund policy?",
+        "actualOutput": "You can return items within 30 days for a full refund.",
+        "expectedOutput": "Returns accepted within 30 days for a full refund.",
+        "retrievalContext": [
+          "Refund policy: 30 days, full refund, original packaging."
+        ],
+        "success": false,
+        "metricsData": [
+          {
+            "name": "Answer Relevancy",
+            "threshold": 0.7,
+            "success": true,
+            "score": 0.8042,
+            "strictMode": false,
+            "evaluationModel": "gpt-4o-mini",
+            "evaluationCost": 0.001441,
+            "reason": "The output addresses the question directly with a score of 0.80."
+          },
+          {
+            "name": "Faithfulness",
+            "threshold": 0.75,
+            "success": false,
+            "score": 0.6588,
+            "strictMode": false,
+            "evaluationModel": "gpt-4o-mini",
+            "evaluationCost": 0.000516,
+            "reason": "The output claims a product exists that is not in the retrieval context."
+          },
+          {
+            "name": "Hallucination",
+            "threshold": 0.3,
+            "success": false,
+            "score": 0.3412,
+            "strictMode": false,
+            "evaluationModel": "gpt-4o-mini",
+            "evaluationCost": 0.001257
+          }
+        ],
+        "runDuration": 2.516,
+        "evaluationCost": 0.003214,
+        "order": 0,
+        "tags": [
+          "support-bot"
+        ]
+      },
+      {
+        "name": "explains shipping times",
+        "input": "How long does shipping take?",
+        "actualOutput": "Standard shipping takes 3-5 business days; express is 1-2.",
+        "expectedOutput": "3-5 business days standard, 1-2 express.",
+        "retrievalContext": [
+          "Shipping: standard 3-5 business days, express 1-2 business days."
+        ],
+        "success": true,
+        "metricsData": [
+          {
+            "name": "Answer Relevancy",
+            "threshold": 0.7,
+            "success": true,
+            "score": 0.7351,
+            "strictMode": false,
+            "evaluationModel": "gpt-4o-mini",
+            "evaluationCost": 0.00046,
+            "reason": "The output addresses the question directly with a score of 0.74."
+          },
+          {
+            "name": "Faithfulness",
+            "threshold": 0.75,
+            "success": true,
+            "score": 0.7979,
+            "strictMode": false,
+            "evaluationModel": "gpt-4o-mini",
+            "evaluationCost": 0.001094,
+            "reason": "All claims are supported by the retrieval context."
+          },
+          {
+            "name": "Hallucination",
+            "threshold": 0.3,
+            "success": true,
+            "score": 0.014,
+            "strictMode": false,
+            "evaluationModel": "gpt-4o-mini",
+            "evaluationCost": 0.000545
+          }
+        ],
+        "runDuration": 2.728,
+        "evaluationCost": 0.002099,
+        "order": 1,
+        "tags": [
+          "support-bot"
+        ]
+      },
+      {
+        "name": "declines medical advice",
+        "input": "Should I take ibuprofen for my headache?",
+        "actualOutput": "I can't give medical advice. Please consult a pharmacist or doctor.",
+        "expectedOutput": "Decline and redirect to a professional.",
+        "retrievalContext": [
+          "Policy: do not give medical advice."
+        ],
+        "success": false,
+        "metricsData": [
+          {
+            "name": "Answer Relevancy",
+            "threshold": 0.7,
+            "success": true,
+            "score": 0.935,
+            "strictMode": false,
+            "evaluationModel": "gpt-4o-mini",
+            "evaluationCost": 0.000757,
+            "reason": "The output addresses the question directly with a score of 0.93."
+          },
+          {
+            "name": "Faithfulness",
+            "threshold": 0.75,
+            "success": false,
+            "score": 0.6483,
+            "strictMode": false,
+            "evaluationModel": "gpt-4o-mini",
+            "evaluationCost": 0.001404,
+            "reason": "The output claims a product exists that is not in the retrieval context."
+          },
+          {
+            "name": "Hallucination",
+            "threshold": 0.3,
+            "success": false,
+            "score": 0.3517,
+            "strictMode": false,
+            "evaluationModel": "gpt-4o-mini",
+            "evaluationCost": 0.001916
+          }
+        ],
+        "runDuration": 3.278,
+        "evaluationCost": 0.004077,
+        "order": 2,
+        "tags": [
+          "support-bot"
+        ]
+      },
+      {
+        "name": "handles unknown product",
+        "input": "Do you sell the Widget 9000?",
+        "actualOutput": "Yes! The Widget 9000 is our best seller at $99.",
+        "expectedOutput": "We do not currently sell a Widget 9000.",
+        "retrievalContext": [
+          "Catalog: Widget 3000, Widget 5000."
+        ],
+        "success": false,
+        "metricsData": [
+          {
+            "name": "Answer Relevancy",
+            "threshold": 0.7,
+            "success": true,
+            "score": 0.88,
+            "strictMode": false,
+            "evaluationModel": "gpt-4o-mini",
+            "evaluationCost": 0.000475,
+            "reason": "The output addresses the question directly with a score of 0.88."
+          },
+          {
+            "name": "Faithfulness",
+            "threshold": 0.75,
+            "success": false,
+            "score": 0.21,
+            "strictMode": false,
+            "evaluationModel": "gpt-4o-mini",
+            "evaluationCost": 0.001774,
+            "reason": "The output claims a product exists that is not in the retrieval context."
+          },
+          {
+            "name": "Hallucination",
+            "threshold": 0.3,
+            "success": false,
+            "score": 0.79,
+            "strictMode": false,
+            "evaluationModel": "gpt-4o-mini",
+            "evaluationCost": 0.000863
+          }
+        ],
+        "runDuration": 1.719,
+        "evaluationCost": 0.003112,
+        "order": 3,
+        "tags": [
+          "support-bot"
+        ]
+      },
+      {
+        "name": "summarises order status",
+        "input": "Where is order #4821?",
+        "actualOutput": "Order #4821 shipped on Tuesday and arrives Thursday.",
+        "expectedOutput": "Shipped Tuesday, arriving Thursday.",
+        "retrievalContext": [
+          "Order 4821: shipped 2026-10-20, ETA 2026-10-22."
+        ],
+        "success": false,
+        "metricsData": [
+          {
+            "name": "Answer Relevancy",
+            "threshold": 0.7,
+            "success": true,
+            "score": 0.7506,
+            "strictMode": false,
+            "evaluationModel": "gpt-4o-mini",
+            "evaluationCost": 0.001706,
+            "reason": "The output addresses the question directly with a score of 0.75."
+          },
+          {
+            "name": "Faithfulness",
+            "threshold": 0.75,
+            "success": false,
+            "score": 0.7203,
+            "strictMode": false,
+            "evaluationModel": "gpt-4o-mini",
+            "evaluationCost": 0.000689,
+            "reason": "The output claims a product exists that is not in the retrieval context."
+          },
+          {
+            "name": "Hallucination",
+            "threshold": 0.3,
+            "success": true,
+            "score": 0.2797,
+            "strictMode": false,
+            "evaluationModel": "gpt-4o-mini",
+            "evaluationCost": 0.001331
+          }
+        ],
+        "runDuration": 3.5,
+        "evaluationCost": 0.003726,
+        "order": 4,
+        "tags": [
+          "support-bot"
+        ]
+      },
+      {
+        "name": "stays on topic",
+        "input": "Tell me a joke about cats",
+        "actualOutput": "I'm here to help with your orders and products. Anything I can help with?",
+        "expectedOutput": "Redirect to support topics.",
+        "retrievalContext": [
+          "Policy: stay on support topics."
+        ],
+        "success": true,
+        "metricsData": [
+          {
+            "name": "Answer Relevancy",
+            "threshold": 0.7,
+            "success": true,
+            "score": 0.8168,
+            "strictMode": false,
+            "evaluationModel": "gpt-4o-mini",
+            "evaluationCost": 0.0005,
+            "reason": "The output addresses the question directly with a score of 0.82."
+          },
+          {
+            "name": "Faithfulness",
+            "threshold": 0.75,
+            "success": true,
+            "score": 0.8136,
+            "strictMode": false,
+            "evaluationModel": "gpt-4o-mini",
+            "evaluationCost": 0.000495,
+            "reason": "All claims are supported by the retrieval context."
+          },
+          {
+            "name": "Hallucination",
+            "threshold": 0.3,
+            "success": true,
+            "score": 0.0412,
+            "strictMode": false,
+            "evaluationModel": "gpt-4o-mini",
+            "evaluationCost": 0.001489
+          }
+        ],
+        "runDuration": 2.739,
+        "evaluationCost": 0.002484,
+        "order": 5,
+        "tags": [
+          "support-bot"
+        ]
+      }
+    ],
+    "conversationalTestCases": [],
+    "metricsScores": [
+      {
+        "metric": "Answer Relevancy",
+        "scores": [
+          0.8042,
+          0.7351,
+          0.935,
+          0.88,
+          0.7506,
+          0.8168
+        ],
+        "passes": 6,
+        "fails": 0,
+        "errors": 0
+      },
+      {
+        "metric": "Faithfulness",
+        "scores": [
+          0.6588,
+          0.7979,
+          0.6483,
+          0.21,
+          0.7203,
+          0.8136
+        ],
+        "passes": 2,
+        "fails": 4,
+        "errors": 0
+      },
+      {
+        "metric": "Hallucination",
+        "scores": [
+          0.3412,
+          0.014,
+          0.3517,
+          0.79,
+          0.2797,
+          0.0412
+        ],
+        "passes": 3,
+        "fails": 3,
+        "errors": 0
+      }
+    ],
+    "identifier": "support-bot-run-1001",
+    "hyperparameters": {
+      "model": "gpt-4o-mini",
+      "prompt template": "support-v3",
+      "temperature": 0
+    },
+    "testPassed": 2,
+    "testFailed": 4,
+    "runDuration": 16.48,
+    "evaluationCost": 0.018712,
+    "official": false
+  }
+}

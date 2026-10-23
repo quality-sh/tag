@@ -1,0 +1,51 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "types": ["bun"],
+    "paths": {
+      "@quality-sh/verdict-schema": ["./packages/schema/src/index.ts"],
+      "@quality-sh/verdict-adapters": ["./packages/adapters/src/index.ts"],
+      "@quality-sh/verdict-ui": ["./packages/ui/src/index.ts"],
+      "@quality-sh/verdict-ui/global.css": ["./packages/ui/src/global.css"]
+    },
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnostics": true,
+        "diagnosticsName": true,
+        "refactors": false,
+        "quickinfo": false,
+        "completions": false,
+        "goto": false,
+        "inlays": false,
+        "renames": false,
+        "missingDiagnosticNextLine": "off",
+        "includeSuggestionsInTsc": false,
+        "excludeExternalLibrariesWhenSkipLibCheck": true,
+        "diagnosticSeverity": {
+          "effectInVoidSuccess": "error",
+          "effectInFailure": "error",
+          "lazyPromiseInEffectSync": "error",
+          "layerMergeAllWithDependencies": "error",
+          "scopeInLayerEffect": "error",
+          "duplicatePackage": "error",
+          "unsafeEffectTypeAssertion": "error",
+          "unknownInEffectCatch": "error",
+          "returnEffectInGen": "error",
+          "catchUnfailableEffect": "error"
+        }
+      }
+    ]
+  },
+  "include": ["packages/*/src", "packages/*/test", "packages/app/vite.config.ts", "scripts/*.ts"]
+}

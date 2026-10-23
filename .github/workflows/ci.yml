@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  quality:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: TypeScript
+            command: bun run typecheck
+          - name: Effect diagnostics
+            command: bun run effect:check
+          - name: ESLint
+            command: bun run lint
+          - name: Prettier
+            command: bun run format:check
+          - name: Knip
+            command: bun run knip
+          - name: Dependency audit
+            command: bun run audit
+          - name: Web bundle
+            command: bun run build:web
+    steps:
+      - name: Check out head revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.3
+          token: ""
+          no-cache: true
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Run ${{ matrix.name }}
+        run: ${{ matrix.command }}
+
+  repository-validation:
+    name: Repository integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out head and base revisions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check pull request diff
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: git diff --check "$BASE_SHA" "$HEAD_SHA"
+      - name: Lint workflows
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
+  tests:
+    name: Tests and changed-line coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    services:
+      # The S3 store contract test runs against RustFS; it skips when :9000 is unreachable.
+      rustfs:
+        image: rustfs/rustfs:latest
+        ports:
+          - 9000:9000
+        env:
+          RUSTFS_ACCESS_KEY: verdict
+          RUSTFS_SECRET_KEY: verdictdev
+    steps:
+      - name: Check out head and base revisions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.3
+          token: ""
+          no-cache: true
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Install the Playwright browser the fixture builder uses
+        run: bunx playwright install --with-deps chromium-headless-shell
+      - name: Run tests with coverage
+        run: bun run test:coverage
+      - name: Require 80% changed executable line coverage
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bun run coverage:changed "$BASE_SHA" "$HEAD_SHA"
+
+  required-checks:
+    name: Required checks
+    if: always()
+    needs:
+      - quality
+      - repository-validation
+      - tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - name: Require all blocking checks to pass
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          REPOSITORY_RESULT: ${{ needs.repository-validation.result }}
+          TESTS_RESULT: ${{ needs.tests.result }}
+        run: |
+          if [[ "$QUALITY_RESULT" != "success" || \
+                "$REPOSITORY_RESULT" != "success" || \
+                "$TESTS_RESULT" != "success" ]]; then
+            printf 'Quality: %s\nRepository integrity: %s\nTests: %s\n' \
+              "$QUALITY_RESULT" "$REPOSITORY_RESULT" "$TESTS_RESULT"
+            exit 1
+          fi

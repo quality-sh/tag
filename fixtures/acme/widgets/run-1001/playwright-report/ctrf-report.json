@@ -1,0 +1,258 @@
+{
+  "reportFormat": "CTRF",
+  "specVersion": "0.2.0",
+  "reportId": "d6d2a646-15f2-4793-99bd-7918f003d199",
+  "timestamp": "2026-10-23T06:02:32.774Z",
+  "generatedBy": "playwright-ctrf-json-reporter",
+  "results": {
+    "tool": {
+      "name": "playwright",
+      "version": "1.64.1"
+    },
+    "summary": {
+      "tests": 6,
+      "passed": 4,
+      "failed": 1,
+      "pending": 0,
+      "skipped": 1,
+      "other": 0,
+      "start": 1792735352912,
+      "stop": 1792735369273,
+      "duration": 16361,
+      "suites": 5
+    },
+    "tests": [
+      {
+        "testId": "d748ac400d08b85935ef-40799f2285222d93dc85",
+        "executionId": "a53b5bfa-a748-443d-a3cb-568b4b99ee0e",
+        "attemptId": "72595adb-a21c-4466-ac16-88a2872737c4",
+        "name": "logs in with a valid password",
+        "status": "passed",
+        "duration": 1109,
+        "start": 1792735354240,
+        "stop": 1792735355349,
+        "rawStatus": "passed",
+        "tags": [],
+        "type": "e2e",
+        "filePath": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests/auth.spec.ts",
+        "retries": 0,
+        "flaky": false,
+        "steps": [],
+        "suite": [
+          "chromium",
+          "auth.spec.ts",
+          "auth"
+        ],
+        "attachments": [
+          {
+            "attachmentId": "0761379e-4b54-4600-b738-04a64b5eaf90",
+            "name": "trace",
+            "contentType": "application/zip",
+            "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/auth-auth-logs-in-with-a-valid-password-chromium/trace.zip"
+          }
+        ],
+        "stdout": [],
+        "stderr": []
+      },
+      {
+        "testId": "d748ac400d08b85935ef-2474d353b2e57ce5244d",
+        "executionId": "ef0a91f1-f0b2-4bc4-bbbe-46e7c4bac9e1",
+        "attemptId": "5a7668fc-74bf-4f25-ae8c-c0ae8860c15e",
+        "name": "rejects a bad password",
+        "status": "passed",
+        "duration": 534,
+        "start": 1792735356183,
+        "stop": 1792735356717,
+        "rawStatus": "passed",
+        "tags": [],
+        "type": "e2e",
+        "filePath": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests/auth.spec.ts",
+        "retries": 0,
+        "flaky": false,
+        "steps": [],
+        "suite": [
+          "chromium",
+          "auth.spec.ts",
+          "auth"
+        ],
+        "attachments": [
+          {
+            "attachmentId": "61460287-ece7-4c05-9678-09365c4b0fe1",
+            "name": "trace",
+            "contentType": "application/zip",
+            "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/auth-auth-rejects-a-bad-password-chromium/trace.zip"
+          }
+        ],
+        "stdout": [],
+        "stderr": []
+      },
+      {
+        "testId": "25ab1bfc84c57e3e3a45-1f4c73a7ae45059923ac",
+        "executionId": "80325b0e-aa2f-4cdd-ae1c-4bf7bf173216",
+        "attemptId": "90f0656d-30ef-4ae0-a4e6-10fed05345dc",
+        "name": "adds an item to the cart",
+        "status": "passed",
+        "duration": 1160,
+        "start": 1792735354348,
+        "stop": 1792735355508,
+        "rawStatus": "passed",
+        "tags": [],
+        "type": "e2e",
+        "filePath": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests/checkout.spec.ts",
+        "retries": 0,
+        "flaky": false,
+        "steps": [],
+        "suite": [
+          "chromium",
+          "checkout.spec.ts",
+          "checkout"
+        ],
+        "attachments": [
+          {
+            "attachmentId": "37266449-68a7-4507-8d2f-99f5b36085b5",
+            "name": "trace",
+            "contentType": "application/zip",
+            "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/checkout-checkout-adds-an-item-to-the-cart-chromium/trace.zip"
+          }
+        ],
+        "stdout": [],
+        "stderr": []
+      },
+      {
+        "testId": "25ab1bfc84c57e3e3a45-86ba633ff6ffaf9156f3",
+        "executionId": "7920bb08-e9d7-40f9-96bb-572acab87adf",
+        "attemptId": "286f0204-1f40-4eca-97d0-b29f194808d8",
+        "name": "shows the total",
+        "status": "passed",
+        "duration": 493,
+        "start": 1792735356269,
+        "stop": 1792735356762,
+        "rawStatus": "passed",
+        "tags": [],
+        "type": "e2e",
+        "filePath": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests/checkout.spec.ts",
+        "retries": 0,
+        "flaky": false,
+        "steps": [],
+        "suite": [
+          "chromium",
+          "checkout.spec.ts",
+          "checkout"
+        ],
+        "attachments": [
+          {
+            "attachmentId": "2e2c4e87-15d8-403a-a352-98a6a50b6b31",
+            "name": "trace",
+            "contentType": "application/zip",
+            "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/checkout-checkout-shows-the-total-chromium/trace.zip"
+          }
+        ],
+        "stdout": [],
+        "stderr": []
+      },
+      {
+        "testId": "25ab1bfc84c57e3e3a45-d78cf92e1d9b3c7d0711",
+        "executionId": "68671b73-ede6-4284-88d1-9c51c12b7e9d",
+        "attemptId": "cc17d036-91f9-4770-942b-7871bdae6534",
+        "name": "applies a discount code",
+        "status": "failed",
+        "duration": 5400,
+        "start": 1792735363370,
+        "stop": 1792735368770,
+        "message": "Error: expect(locator).toHaveText(expected) failed\n\nLocator:  locator('#total')\nExpected: \"$37.80\"\nReceived: \"$42.00\"\nTimeout:  5000ms\n\nCall log:\n  - Expect \"toHaveText\" locator('#total') with timeout 5000ms\n  - waiting for locator('#total')\n    14 × locator resolved to <p id=\"total\">$42.00</p>\n       - unexpected value \"$42.00\"\n",
+        "trace": "Error: expect(locator).toHaveText(expected) failed\n\nLocator:  locator('#total')\nExpected: \"$37.80\"\nReceived: \"$42.00\"\nTimeout:  5000ms\n\nCall log:\n  - Expect \"toHaveText\" locator('#total') with timeout 5000ms\n  - waiting for locator('#total')\n    14 × locator resolved to <p id=\"total\">$42.00</p>\n       - unexpected value \"$42.00\"\n\n    at /tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests/checkout.spec.ts:14:42",
+        "snippet": "  12 |   test('applies a discount code', async ({ page }) => {\n  13 |     await page.setContent('<p id=\"total\">$42.00</p>');\n> 14 |     await expect(page.locator('#total')).toHaveText('$37.80');\n     |                                          ^\n  15 |   });\n  16 |   test.skip('ships internationally', async () => {});\n  17 | });",
+        "rawStatus": "failed",
+        "tags": [],
+        "type": "e2e",
+        "filePath": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests/checkout.spec.ts",
+        "retries": 1,
+        "flaky": false,
+        "steps": [],
+        "suite": [
+          "chromium",
+          "checkout.spec.ts",
+          "checkout"
+        ],
+        "attachments": [
+          {
+            "attachmentId": "946a6a48-3cd4-4e91-9a9b-e5ff243eb8bf",
+            "name": "screenshot",
+            "contentType": "image/png",
+            "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/checkout-checkout-applies-a-discount-code-chromium-retry1/test-failed-1.png"
+          },
+          {
+            "attachmentId": "296f957a-c03d-4169-8148-2c44ad6f0848",
+            "name": "error-context",
+            "contentType": "text/markdown",
+            "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/checkout-checkout-applies-a-discount-code-chromium-retry1/error-context.md"
+          },
+          {
+            "attachmentId": "e3a79cdf-204b-4412-afe3-2b3aa4ddfdce",
+            "name": "trace",
+            "contentType": "application/zip",
+            "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/checkout-checkout-applies-a-discount-code-chromium-retry1/trace.zip"
+          }
+        ],
+        "stdout": [],
+        "stderr": [],
+        "retryAttempts": [
+          {
+            "attempt": 1,
+            "attemptId": "be5a4ead-f52a-469e-bdff-e65a37c881bd",
+            "status": "failed",
+            "duration": 5318,
+            "message": "Error: expect(locator).toHaveText(expected) failed\n\nLocator:  locator('#total')\nExpected: \"$37.80\"\nReceived: \"$42.00\"\nTimeout:  5000ms\n\nCall log:\n  - Expect \"toHaveText\" locator('#total') with timeout 5000ms\n  - waiting for locator('#total')\n    14 × locator resolved to <p id=\"total\">$42.00</p>\n       - unexpected value \"$42.00\"\n",
+            "trace": "Error: expect(locator).toHaveText(expected) failed\n\nLocator:  locator('#total')\nExpected: \"$37.80\"\nReceived: \"$42.00\"\nTimeout:  5000ms\n\nCall log:\n  - Expect \"toHaveText\" locator('#total') with timeout 5000ms\n  - waiting for locator('#total')\n    14 × locator resolved to <p id=\"total\">$42.00</p>\n       - unexpected value \"$42.00\"\n\n    at /tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests/checkout.spec.ts:14:42",
+            "snippet": "  12 |   test('applies a discount code', async ({ page }) => {\n  13 |     await page.setContent('<p id=\"total\">$42.00</p>');\n> 14 |     await expect(page.locator('#total')).toHaveText('$37.80');\n     |                                          ^\n  15 |   });\n  16 |   test.skip('ships internationally', async () => {});\n  17 | });",
+            "attachments": [
+              {
+                "attachmentId": "b561f21b-5ff4-4e27-850e-06dc9c3ea894",
+                "name": "screenshot",
+                "contentType": "image/png",
+                "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/checkout-checkout-applies-a-discount-code-chromium/test-failed-1.png"
+              },
+              {
+                "attachmentId": "5a0ec9e4-3fb0-4a1b-b1fc-6dcf5ec3b0ab",
+                "name": "error-context",
+                "contentType": "text/markdown",
+                "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/checkout-checkout-applies-a-discount-code-chromium/error-context.md"
+              },
+              {
+                "attachmentId": "3c81dd38-3e58-4c69-ab11-2a25eb3f4b43",
+                "name": "trace",
+                "contentType": "application/zip",
+                "path": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/test-results/checkout-checkout-applies-a-discount-code-chromium/trace.zip"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "testId": "25ab1bfc84c57e3e3a45-fb436dc4a093922883df",
+        "executionId": "3ec900dc-7289-4691-842e-d3b3d710efee",
+        "attemptId": "b1b146e5-1444-4ed0-a3bc-b7a9530798eb",
+        "name": "ships internationally",
+        "status": "skipped",
+        "duration": 0,
+        "start": 1792735369157,
+        "stop": 1792735369157,
+        "rawStatus": "skipped",
+        "tags": [],
+        "type": "e2e",
+        "filePath": "/tmp/claude-1000/-home-ben--config-Claude-scratch-workspaces-1ca99d36-79b5-4c8d-bd16-9ce9a559f9db-81bd23b4-e92b-4af2-a1dd-d953a67a5e55-scratch-2026-10-23-7cb5c2/68a88154-c3be-4625-b9e3-cb1028975ce9/scratchpad/pwfix/tests/checkout.spec.ts",
+        "retries": 0,
+        "flaky": false,
+        "steps": [],
+        "suite": [
+          "chromium",
+          "checkout.spec.ts",
+          "checkout"
+        ],
+        "attachments": [],
+        "stdout": [],
+        "stderr": []
+      }
+    ]
+  }
+}

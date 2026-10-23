@@ -1,0 +1,40 @@
+{
+  "name": "verdict",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "bun --watch packages/app/src/index.ts",
+    "start": "bun run build:web && bun packages/app/src/index.ts",
+    "s3": "docker compose up -d",
+    "build:web": "bun run --cwd packages/app build",
+    "dev:web": "bun run --cwd packages/app dev",
+    "test:coverage": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov",
+    "coverage:changed": "bun scripts/check-changed-line-coverage.ts",
+    "effect:check": "bun scripts/check-effect-diagnostics.mjs",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "knip": "knip",
+    "audit": "bun audit --audit-level=high",
+    "check": "bun run typecheck && bun run effect:check && bun run lint && bun run format:check && bun run knip && bun test"
+  },
+  "devDependencies": {
+    "@effect/language-service": "^0.87.5",
+    "@eslint/js": "^10.0.1",
+    "@types/bun": "latest",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "ctrf": "^0.5.0",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
+    "knip": "^6.42.1",
+    "prettier": "^3.9.10",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.72.0"
+  },
+  "dependencies": {}
+}

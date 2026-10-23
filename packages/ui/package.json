@@ -1,0 +1,16 @@
+{
+  "name": "@quality-sh/verdict-ui",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./global.css": "./src/global.css"
+  },
+  "dependencies": {
+    "@fontsource/cormorant-garamond": "^5.3.0",
+    "@fontsource/fragment-mono": "^5.3.0",
+    "@stylexjs/stylex": "^0.19.1",
+    "react": "^19.2.0"
+  }
+}

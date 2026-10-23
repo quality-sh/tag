@@ -1,0 +1,12 @@
+{
+  "name": "@quality-sh/verdict-adapters",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@quality-sh/verdict-schema": "workspace:*",
+    "fast-xml-parser": "^5.2.0"
+  }
+}

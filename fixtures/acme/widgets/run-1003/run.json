@@ -1,0 +1,12 @@
+{
+  "runId": "run-1003",
+  "workflow": "tests",
+  "branch": "feat/checkout-retry",
+  "commit": "c0ffee1",
+  "timestamp": "2026-10-23T08:05:00Z",
+  "buildUrl": "https://github.com/acme/widgets/actions/runs/1003",
+  "environment": "staging",
+  "tags": [
+    "pr"
+  ]
+}

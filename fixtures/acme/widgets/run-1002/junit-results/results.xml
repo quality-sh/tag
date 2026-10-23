@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+<testsuite name="pytest" errors="0" failures="1" skipped="1" tests="6" time="0.059" timestamp="2026-10-22T14:40:00Z" hostname="runner">
+  <testcase classname="tests.test_pricing" name="test_discount_applies" time="0.012" file="tests/test_pricing.py" line="24">
+  </testcase>
+  <testcase classname="tests.test_pricing" name="test_tax_rounding" time="0.004" file="tests/test_pricing.py" line="73">
+  </testcase>
+  <testcase classname="tests.test_pricing" name="test_negative_quantity_rejected" time="0.003" file="tests/test_pricing.py" line="17">
+  </testcase>
+  <testcase classname="tests.test_inventory" name="test_restock_updates_count" time="0.031" file="tests/test_inventory.py" line="37">
+  </testcase>
+  <testcase classname="tests.test_inventory" name="test_oversell_blocked" time="0.009" file="tests/test_inventory.py" line="46">
+    <failure message="AssertionError: assert 3 == 2">AssertionError
+assert 3 == 2
+  where 3 = Inventory.count('widget-3000')
+
+tests/test_inventory.py:42: AssertionError</failure>
+  </testcase>
+  <testcase classname="tests.test_inventory" name="test_skip_legacy_sku" time="0.000" file="tests/test_inventory.py" line="26">
+    <skipped type="pytest.skip" message="legacy sku retired"/>
+  </testcase>
+</testsuite>
+</testsuites>

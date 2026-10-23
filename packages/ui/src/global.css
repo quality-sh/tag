@@ -1,0 +1,62 @@
+/* Global styles StyleX cannot express: fonts, the reset, the body, selection and focus.
+   Everything else is in the components (theme.stylex.ts holds the tokens). */
+
+@import "@fontsource/cormorant-garamond/latin-300.css";
+@import "@fontsource/cormorant-garamond/latin-400.css";
+@import "@fontsource/cormorant-garamond/latin-400-italic.css";
+@import "@fontsource/cormorant-garamond/latin-500.css";
+@import "@fontsource/fragment-mono/latin-400.css";
+
+:root {
+  color-scheme: dark;
+  /* The page gutter: the hyp.dev edge, which grows until the content column is 1312px. */
+  --pad-x: clamp(22px, 4.5vw, 64px);
+  --edge: max(var(--pad-x), (100% - 1312px) / 2);
+}
+@media (max-width: 600px) {
+  :root {
+    --pad-x: 16px;
+  }
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+html {
+  scroll-behavior: smooth;
+}
+body {
+  background: #000000;
+  color: #e0def4;
+  font-family: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  font-size: 18px;
+  line-height: 1.5;
+  font-feature-settings: "calt" 0;
+  /* Cormorant's default figures are old-style; numbers sit on the baseline everywhere here. */
+  font-variant-numeric: lining-nums;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+::selection {
+  background: #eb6f92;
+  color: #000000;
+}
+:focus-visible {
+  outline: 1px solid #ebbcba;
+  outline-offset: 3px;
+}
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
