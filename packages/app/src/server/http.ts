@@ -136,14 +136,17 @@ export const ApiRoutes = HttpRouter.use((router) =>
       json({ ok: true, source: cfg.source, store: Option.isSome(cfg.s3) ? "s3" : "fs" }),
     );
 
+    // The dashboard shows "install on GitHub" only while no installation is recorded, and the
+    // link goes through /api/install so the signed state travels with it.
     yield* router.add("GET", "/api/session", (req) =>
-      Effect.succeed(
-        json({
+      Effect.gen(function* () {
+        const installed = Option.isSome(yield* installation.current());
+        return json({
           authenticated: auth.verifySession(req.cookies[SESSION_COOKIE]),
           authRequired: auth.enabled,
-          ...(Option.isSome(installUrl) ? { installUrl: installUrl.value } : {}),
-        }),
-      ),
+          ...(Option.isSome(installUrl) && !installed ? { installUrl: "/api/install" } : {}),
+        });
+      }),
     );
 
     yield* router.add("POST", "/api/login", () =>

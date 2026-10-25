@@ -60,7 +60,7 @@ import {
   type Suggestion,
 } from "../grouping.ts";
 import type { CollectionRow, GroupDetail, GroupsPage, RepoRow } from "./client.ts";
-import { Loaded, SignOut, cap } from "./common.tsx";
+import { InstallLink, Loaded, SignOut, cap } from "./common.tsx";
 import {
   collectionsAtom,
   createCollectionFn,
@@ -70,7 +70,6 @@ import {
   href,
   ingestFn,
   scopePath,
-  sessionAtom,
   suggestionsAtom,
   typedAtom,
   viewKey,
@@ -126,13 +125,6 @@ function daily(groups: ReadonlyArray<GroupRow>, days = 14) {
 const Good = ({ n }: { n: number | undefined }) =>
   n === undefined ? <Dim>—</Dim> : n > 0 ? <K tone="good">{n}</K> : <Dim>0</Dim>;
 const Dim = ({ children }: { children: ReactNode }) => <K tone="dim">{children}</K>;
-
-/** The App install link, when the server serves one; GitHub sends the admin back here. */
-function InstallLink() {
-  const session = useAtomValue(sessionAtom);
-  const installUrl = AsyncResult.isSuccess(session) ? session.value.installUrl : undefined;
-  return installUrl ? <TopbarAction href={installUrl}>install on GitHub</TopbarAction> : null;
-}
 
 const Verdict = ({ failed, none }: { failed: boolean; none?: boolean }) =>
   none ? (

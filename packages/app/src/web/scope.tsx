@@ -21,7 +21,7 @@ import {
 import { GROUP_BY_INFO, RANGES, type GroupBy, type Range } from "../grouping.ts";
 import { BackfillStatus, backfillOf, useBackfilling } from "./backfill.tsx";
 import type { OverviewPage as Overview, RepositoryState } from "./client.ts";
-import { Loaded, SignOut, cap } from "./common.tsx";
+import { InstallLink, Loaded, SignOut, cap } from "./common.tsx";
 import { GroupsTable, Rail, Search, scopeCrumbs } from "./home.tsx";
 import { Repository } from "./overview.tsx";
 import {
@@ -86,6 +86,7 @@ export function ScopePage({ scope, q, range }: { scope: Scope; q: string; range:
         actions={
           <>
             <TopbarAction href={href.collections()}>collections</TopbarAction>
+            <InstallLink />
             <SignOut />
           </>
         }

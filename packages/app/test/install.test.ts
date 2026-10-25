@@ -58,7 +58,7 @@ describe("the install flow", () => {
     });
     try {
       const session = await (await fetch(`${app.base}/api/session`)).json();
-      expect(session.installUrl).toBe("https://github.com/apps/tag-app/installations/new");
+      expect(session.installUrl).toBe("/api/install");
 
       const res = await fetch(`${app.base}/api/install`, { redirect: "manual" });
       expect(res.status).toBe(302);
@@ -91,6 +91,9 @@ describe("the install flow", () => {
       );
       expect(back.status).toBe(302);
       expect(back.headers.get("location")).toBe("/");
+      // Installed: the dashboard no longer offers the link.
+      const after = await (await fetch(`${app.base}/api/session`)).json();
+      expect(after.installUrl).toBeUndefined();
 
       // The forked pass mints an installation token and lists the installation's repos.
       const listed = await eventually(() =>
