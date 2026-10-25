@@ -3,9 +3,9 @@ import { generateKeyPairSync } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Deferred, Effect, Fiber, Layer, Option, Redacted } from "effect";
+import { Cause, Deferred, Effect, Exit, Fiber, Layer, Option, Redacted } from "effect";
 import { TestClock } from "effect/testing";
-import { HttpClient, HttpClientResponse } from "effect/http";
+import { HttpClient } from "effect/http";
 import { AppConfig, type GithubConfig } from "../src/server/config.ts";
 import { ArtifactSource } from "../src/server/artifact-source.ts";
 import { ArtifactStore } from "../src/server/artifact-store.ts";
@@ -14,63 +14,40 @@ import { Installation } from "../src/server/installation.ts";
 import { ResultStore } from "../src/server/result-store.ts";
 import { Ingest } from "../src/server/ingest.ts";
 import { buildZip } from "../src/server/zip.ts";
-import { testConfig, testLayer } from "./helpers.ts";
-
-type Hit = { method: string; url: URL; auth: string | undefined; etag: string | undefined };
-
-/** A GitHub that answers from a table of path -> body, remembering every request. */
-const fakeGithub = (
-  routes: Record<string, (url: URL, headers: Readonly<Record<string, string>>) => unknown>,
-) => {
-  const hits: Hit[] = [];
-  const client = HttpClient.make((request, url) =>
-    Effect.sync(() => {
-      hits.push({
-        method: request.method,
-        url,
-        auth: request.headers["authorization"],
-        etag: request.headers["if-none-match"],
-      });
-      const route = routes[url.pathname];
-      if (!route)
-        return HttpClientResponse.fromWeb(
-          request,
-          new Response(JSON.stringify({ message: "Not Found" }), { status: 404 }),
-        );
-      const out = route(url, request.headers);
-      return HttpClientResponse.fromWeb(
-        request,
-        out instanceof Response
-          ? out
-          : new Response(JSON.stringify(out), {
-              status: 200,
-              headers: { "content-type": "application/json" },
-            }),
-      );
-    }),
-  );
-  return { hits, layer: Layer.succeed(HttpClient.HttpClient, client) };
-};
+import { fakeGithub, testConfig, testLayer } from "./helpers.ts";
 
 const cfg = (over: Partial<GithubConfig> = {}): GithubConfig => ({
   auth: { _tag: "token", token: Redacted.make("ghp_test") },
   apiUrl: "https://api.github.test",
+  slug: Option.none(),
   repos: [{ owner: "acme", repo: "widgets" }],
   ...over,
 });
 
 /** The source over the fake GitHub, with the real Installation service underneath. */
-const sourceWith = (g: GithubConfig, http: Layer.Layer<HttpClient.HttpClient>) => {
-  const config = Layer.succeed(AppConfig.Service, testConfig({ github: Option.some(g) }));
-  const store = ArtifactStore.layerFs(join(mkdtempSync(join(tmpdir(), "tag-")), "store"));
-  const results = ResultStore.layer.pipe(Layer.provide(Layer.mergeAll(config, store)));
-  const installation = Installation.layer.pipe(
-    Layer.provide(Layer.mergeAll(config, results)),
+const installationLayer = (config: Layer.Layer<AppConfig.Service>) =>
+  Installation.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        config,
+        ResultStore.layer.pipe(
+          Layer.provide(
+            Layer.mergeAll(
+              config,
+              ArtifactStore.layerFs(join(mkdtempSync(join(tmpdir(), "tag-")), "store")),
+            ),
+          ),
+        ),
+      ),
+    ),
     Layer.orDie,
   );
+
+const sourceWith = (g: GithubConfig, http: Layer.Layer<HttpClient.HttpClient>) => {
+  const config = Layer.succeed(AppConfig.Service, testConfig({ github: Option.some(g) }));
   return GitHubSource.layer.pipe(
     Layer.provide(http),
-    Layer.provideMerge(installation),
+    Layer.provideMerge(installationLayer(config)),
     Layer.provide(config),
   );
 };
@@ -793,5 +770,26 @@ describe("GitHubSource", () => {
         expect(gh.hits[1]?.auth).toBe("Bearer ghs_installation");
       }).pipe(Effect.provide(sourceWith(app, gh.layer))),
     );
+  });
+
+  test("a github source without credentials dies naming what the config needs", async () => {
+    const gh = fakeGithub({});
+    const config = Layer.succeed(AppConfig.Service, testConfig({ github: Option.none() }));
+    const exit = await Effect.runPromiseExit(
+      Effect.gen(function* () {
+        return yield* ArtifactSource.Service;
+      }).pipe(
+        Effect.provide(
+          GitHubSource.layer.pipe(
+            Layer.provide(gh.layer),
+            Layer.provide(installationLayer(config)),
+            Layer.provide(config),
+          ),
+        ),
+      ),
+    );
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isSuccess(exit)) return;
+    expect(String(Cause.squash(exit.cause))).toContain("GITHUB_APP_PRIVATE_KEY");
   });
 });

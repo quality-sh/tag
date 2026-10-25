@@ -22,6 +22,8 @@ export type GithubAuth =
 export interface GithubConfig {
   readonly auth: GithubAuth;
   readonly apiUrl: string;
+  /** The App's URL slug, from GITHUB_APP_SLUG; it builds the "Install on GitHub" link. */
+  readonly slug: Option.Option<string>;
   /** Empty means every repository the installation can see. */
   readonly repos: ReadonlyArray<{ readonly owner: string; readonly repo: string }>;
 }
@@ -83,6 +85,7 @@ export const layer = Layer.effect(
           apiUrl: yield* Config.String("GITHUB_API_URL").pipe(
             Config.withDefault("https://api.github.com"),
           ),
+          slug: yield* Config.option(Config.String("GITHUB_APP_SLUG")),
           repos: (yield* Config.String("GITHUB_REPOS").pipe(Config.withDefault("")))
             .split(",")
             .map((s) => s.trim())

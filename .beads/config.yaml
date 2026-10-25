@@ -66,9 +66,10 @@
 # - github.token    → use GITHUB_TOKEN env var instead
 
 issue-prefix: "tag"
-
 # Tickets travel with the repository: every write re-exports .beads/issues.jsonl and
 # stages it. A fresh clone reads them after `bd init --prefix tag && bd import`.
 export:
-  auto: true
-  git-add: true
+    auto: true
+    git-add: true
+sync:
+    remote: "git+https://github.com/quality-sh/tag.git"

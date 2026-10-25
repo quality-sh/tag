@@ -14,6 +14,7 @@ import { testConfig } from "./helpers.ts";
 const appGithub = (installationId: Option.Option<string>): GithubConfig => ({
   auth: { _tag: "app", appId: "12345", privateKey: Redacted.make("key"), installationId },
   apiUrl: "https://api.github.test",
+  slug: Option.none(),
   repos: [],
 });
 

@@ -7,6 +7,7 @@ export const SESSION_COOKIE = "tag_session";
 export const ARTIFACT_COOKIE = "tag_artifacts";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const HANDOFF_TTL_MS = 60 * 1000;
+const INSTALL_TTL_MS = 10 * 60 * 1000;
 
 export interface Interface {
   readonly enabled: boolean;
@@ -17,6 +18,9 @@ export interface Interface {
   /** One-minute token that the artifact origin exchanges for its own cookie. */
   readonly issueHandoff: () => string;
   readonly verifyHandoff: (token: string | undefined) => boolean;
+  /** Ten-minute token carried through GitHub's install round trip and verified on the way back. */
+  readonly issueInstallState: () => string;
+  readonly verifyInstallState: (token: string | undefined) => boolean;
 }
 
 export class Service extends Context.Service<Service, Interface>()("@tag/Auth") {}
@@ -32,6 +36,16 @@ const constantTimeEqual = (a: string, b: string): boolean => {
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
+};
+
+/** Token checks that guard data, not a session: they hold whether or not a password is set. */
+const verifyToken = (secret: string, kind: string, token: string | undefined): boolean => {
+  if (!token) return false;
+  const dot = token.indexOf(".");
+  if (dot === -1) return false;
+  const exp = Number(token.slice(0, dot));
+  if (!Number.isFinite(exp) || exp < Date.now()) return false;
+  return constantTimeEqual(token.slice(dot + 1), hmac(secret, `${kind}.${exp}`));
 };
 
 export const make = (password: string, secret: string): Interface => {
@@ -56,6 +70,8 @@ export const make = (password: string, secret: string): Interface => {
     verifySession: (t) => verify("session", t),
     issueHandoff: () => issue("handoff", HANDOFF_TTL_MS),
     verifyHandoff: (t) => verify("handoff", t),
+    issueInstallState: () => issue("install", INSTALL_TTL_MS),
+    verifyInstallState: (t) => verifyToken(secret, "install", t),
   };
 };
 
