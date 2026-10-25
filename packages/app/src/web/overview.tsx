@@ -28,12 +28,32 @@ import {
 } from "@quality-sh/tag-ui";
 import { RANGES, type Range, type RecentRun, type RepoOverview } from "../grouping.ts";
 import { BackfillStatus, backfillOf, progressText, useBackfilling } from "./backfill.tsx";
-import type { RepositoryState } from "./client.ts";
+import type { RepoScan, RepositoryState } from "./client.ts";
 import { InstallLink, Loaded, SignOut } from "./common.tsx";
 import { CollectionsTable, Rail } from "./home.tsx";
 import { href, ingestFn, overviewAtom, overviewKey } from "./state.ts";
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+
+/** What the repository produces or needs, in one line. */
+export const scanNote = (scan: RepoScan): string => {
+  switch (scan.classification) {
+    case "reporting":
+      return `reports from ${scan.reporting.join(", ")}`;
+    case "needs-change":
+      return `needs a CI change: ${scan.runners
+        .map((r) => (r.job ? `run ${r.runner} in job ${r.job}` : `run ${r.runner}`))
+        .join(", ")}`;
+    case "unsupported":
+      return `uploads test output TAG cannot read yet: ${scan.unread
+        .map((u) => `${u.name} (${u.format})`)
+        .join(", ")}`;
+    case "no-tests":
+      return "no tests found";
+    default:
+      return "";
+  }
+};
 
 export function OverviewPage({ range }: { range: Range }) {
   const result = useAtomValue(overviewAtom(overviewKey({ range, q: "" })));
@@ -102,6 +122,7 @@ export function OverviewPage({ range }: { range: Range }) {
                   first={i === 0}
                   link
                   state={backfillOf(backfilling, r.owner, r.repo)}
+                  scan={d.scans[`${r.owner}/${r.repo}`]}
                 />
               ))}
               {d.collections.length > 0 && (
@@ -124,6 +145,7 @@ export function Repository({
   first,
   link,
   state,
+  scan,
 }: {
   r: RepoOverview;
   range: Range;
@@ -131,6 +153,8 @@ export function Repository({
   link?: boolean;
   /** Its ingest state, when it is still backfilling. */
   state?: RepositoryState | undefined;
+  /** Its last scan, when the page carries one. */
+  scan?: RepoScan | undefined;
 }) {
   const main = r.main.run;
   const view = { range, q: `repo:${r.owner}/${r.repo}` };
@@ -295,6 +319,12 @@ export function Repository({
             <>
               {" · "}
               <K tone="dim">{progressText(state)}</K>
+            </>
+          )}
+          {scan && scan.classification !== null && (
+            <>
+              {" · "}
+              <K tone="dim">{scanNote(scan)}</K>
             </>
           )}
         </>

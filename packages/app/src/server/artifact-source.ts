@@ -5,6 +5,9 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { Ref } from "../grouping.ts";
 import { buildZip, type ZipEntry } from "./zip.ts";
 
+/** The reserved per-repository directory holding the file tree the scan reads. */
+export const TREE_DIR = "tree";
+
 export class SourceError extends Schema.TaggedError<SourceError>()("ArtifactSource.SourceError", {
   operation: Schema.String,
   detail: Schema.String,
@@ -43,6 +46,11 @@ export interface ArtifactMeta extends RepoRef {
   readonly commit?: string;
 }
 
+export interface RepoInfo {
+  readonly defaultBranch: string | null;
+  readonly environments: ReadonlyArray<string>;
+}
+
 export interface Interface {
   readonly kind: "fixtures" | "github";
   /** Cumulative rate-limit waits and the last reported request allowance. */
@@ -51,6 +59,8 @@ export interface Interface {
     readonly remaining: number | null;
   }>;
   readonly repos: () => Effect.Effect<ReadonlyArray<RepoRef>, SourceError>;
+  /** The repository's default branch and environments from the source's own API. */
+  readonly repoInfo: (repo: RepoRef) => Effect.Effect<RepoInfo, SourceError>;
   /** Completed runs, newest first. `since` keeps only runs created at or after that ISO time. */
   readonly listRuns: (
     repo: RepoRef,
@@ -64,6 +74,13 @@ export interface Interface {
   ) => Effect.Effect<ReadonlyArray<ArtifactMeta>, SourceError>;
   /** Releases, tags, pull requests and deployments the source knows for a repository. */
   readonly listRefs: (repo: RepoRef) => Effect.Effect<ReadonlyArray<Ref>, SourceError>;
+  /** Blob paths of the repository tree on its default branch. */
+  readonly repoTree: (repo: RepoRef) => Effect.Effect<ReadonlyArray<string>, SourceError>;
+  /** Text of the requested paths; absent paths come back absent. */
+  readonly repoFiles: (
+    repo: RepoRef,
+    paths: ReadonlyArray<string>,
+  ) => Effect.Effect<ReadonlyArray<{ path: string; text: string }>, SourceError>;
   /** The artifact as zip bytes. */
   readonly openArtifact: (artifact: ArtifactMeta) => Effect.Effect<Uint8Array, SourceError>;
 }
@@ -98,6 +115,13 @@ const RefsJson = Schema.Array(
   }),
 );
 const decodeRefs = Schema.decodeUnknownResult(RefsJson);
+
+/** The repository's own words about itself; everything but the name is optional. */
+const RepoJson = Schema.Struct({
+  defaultBranch: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  environments: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+const decodeRepoJson = Schema.decodeUnknownResult(RepoJson);
 
 const srcError = (operation: string, detail: string) => (cause: unknown) =>
   new SourceError({ operation, detail, cause });
@@ -165,6 +189,7 @@ export const makeFixtures = (dir: string): Interface => {
         const base = join(dir, repo.owner, repo.repo);
         const runs: RunMeta[] = [];
         for (const runId of await listDirs(base)) {
+          if (runId === TREE_DIR) continue;
           const metaFile = Bun.file(join(base, runId, "run.json"));
           const meta = (await metaFile.exists()) ? ((await metaFile.json()) as RunJson) : {};
           const run: RunMeta = {
@@ -251,6 +276,55 @@ export const makeFixtures = (dir: string): Interface => {
       catch: srcError("listRefs", `${repo.owner}/${repo.repo}`),
     });
 
+  const repoInfo = (repo: RepoRef) =>
+    Effect.tryPromise({
+      try: async () => {
+        const file = Bun.file(join(dir, repo.owner, repo.repo, "repo.json"));
+        if (!(await file.exists())) return { defaultBranch: null, environments: [] };
+        const r = decodeRepoJson(await file.json());
+        if (r._tag === "Failure") throw new Error(String(r.failure));
+        return {
+          defaultBranch: r.success.defaultBranch ?? null,
+          environments: r.success.environments ?? [],
+        };
+      },
+      catch: srcError("repoInfo", `${repo.owner}/${repo.repo}`),
+    });
+
+  /** Blob paths under the repo's tree/, relative to the repo root; no tree/ means no files. */
+  const repoTree = (repo: RepoRef) =>
+    Effect.tryPromise({
+      try: async () => {
+        const root = join(dir, repo.owner, repo.repo, TREE_DIR);
+        const rootStat = await stat(root).catch(() => undefined);
+        if (!rootStat?.isDirectory()) return [];
+        const out: string[] = [];
+        const walk = async (d: string, rel: string): Promise<void> => {
+          for (const e of await readdir(d, { withFileTypes: true })) {
+            if (e.isDirectory()) await walk(join(d, e.name), `${rel}${e.name}/`);
+            else out.push(rel + e.name);
+          }
+        };
+        await walk(root, "");
+        return out.sort();
+      },
+      catch: srcError("repoTree", `${repo.owner}/${repo.repo}`),
+    });
+
+  const repoFiles = (repo: RepoRef, paths: ReadonlyArray<string>) =>
+    Effect.tryPromise({
+      try: async () => {
+        const root = join(dir, repo.owner, repo.repo, TREE_DIR);
+        const out: Array<{ path: string; text: string }> = [];
+        for (const p of paths) {
+          const file = Bun.file(join(root, p));
+          if (await file.exists()) out.push({ path: p, text: await file.text() });
+        }
+        return out;
+      },
+      catch: srcError("repoFiles", `${repo.owner}/${repo.repo}`),
+    });
+
   const openArtifact = (artifact: ArtifactMeta) =>
     Effect.tryPromise({
       try: async () =>
@@ -264,10 +338,13 @@ export const makeFixtures = (dir: string): Interface => {
     kind: "fixtures",
     requestStats: () => Effect.succeed({ waits: 0, remaining: null }),
     repos,
+    repoInfo,
     listRuns,
     listArtifacts,
     listRepoArtifacts,
     listRefs,
+    repoTree,
+    repoFiles,
     openArtifact,
   };
 };

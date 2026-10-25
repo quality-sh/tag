@@ -96,6 +96,13 @@ const filtersOf = (collections: ReadonlyArray<Collection>, c: string | null, q: 
   return [...parseQuery(scope?.query ?? ""), ...parseQuery(q ?? "")];
 };
 
+/** owner/repo → the repository's own default branch, from its scan row. */
+const defaultBranchesOf = (scans: ReadonlyArray<ResultStore.ScanRow>) => {
+  const out: Record<string, string> = {};
+  for (const s of scans) if (s.defaultBranch) out[`${s.owner}/${s.repo}`] = s.defaultBranch;
+  return out;
+};
+
 const VIEW_COUNTS = [
   "release",
   "branch",
@@ -245,6 +252,8 @@ export const ApiRoutes = HttpRouter.use((router) =>
         const all = yield* results.reports({ since });
         const refs = yield* results.refs();
         const collections = yield* results.collections();
+        const scans = yield* results.scans();
+        const branches = defaultBranchesOf(scans);
         const filters = filtersOf(collections, q.get("c"), q.get("q"));
         const reports = filters.length
           ? matching({ reports: all, refs, filters, since }).kept
@@ -252,13 +261,15 @@ export const ApiRoutes = HttpRouter.use((router) =>
         const counts = Object.fromEntries(
           VIEW_COUNTS.map((g) => [
             g,
-            computeGroups({ reports, refs, by: g, filters: [], since }).length,
+            computeGroups({ reports, refs, by: g, filters: [], since, defaultBranches: branches })
+              .length,
           ]),
         );
         return json({
           range,
           query: q.get("q") ?? "",
-          repos: computeOverview({ reports, refs, since }),
+          repos: computeOverview({ reports, refs, since, defaultBranches: branches }),
+          scans: Object.fromEntries(scans.map((s) => [`${s.owner}/${s.repo}`, s])),
           collections: collectionRows(collections, all, refs, since),
           counts: { ...counts, run: runsOf(reports).length },
           repoList: yield* results.repos(),
@@ -276,13 +287,22 @@ export const ApiRoutes = HttpRouter.use((router) =>
         const reports = yield* results.reports({ since });
         const refs = yield* results.refs();
         const collections = yield* results.collections();
+        const branches = defaultBranchesOf(yield* results.scans());
         const filters = filtersOf(collections, q.get("c"), q.get("q"));
-        const rows = computeGroups({ reports, refs, by, filters, since });
+        const rows = computeGroups({
+          reports,
+          refs,
+          by,
+          filters,
+          since,
+          defaultBranches: branches,
+        });
         const latest = rows.flatMap((g) => (g.latest ? [g.latest] : []));
         const counts = Object.fromEntries(
           VIEW_COUNTS.map((g) => [
             g,
-            computeGroups({ reports, refs, by: g, filters: [], since }).length,
+            computeGroups({ reports, refs, by: g, filters: [], since, defaultBranches: branches })
+              .length,
           ]),
         );
         return json({
@@ -318,7 +338,15 @@ export const ApiRoutes = HttpRouter.use((router) =>
         const reports = yield* results.reports({ since });
         const refs = yield* results.refs();
         const filters = filtersOf(yield* results.collections(), q.get("c"), q.get("q"));
-        const rows = computeGroups({ reports, refs, by, filters, since, trendPoints: 60 });
+        const rows = computeGroups({
+          reports,
+          refs,
+          by,
+          filters,
+          since,
+          trendPoints: 60,
+          defaultBranches: defaultBranchesOf(yield* results.scans()),
+        });
         const group = rows.find((g) => g.key === key);
         if (!group) return notFound("group");
         const mine = reports.filter((r) => r.owner === group.owner && r.repo === group.repo);

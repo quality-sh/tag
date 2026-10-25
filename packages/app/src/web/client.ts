@@ -157,10 +157,24 @@ export interface CollectionRow extends Collection {
   failing: number;
   repos: number;
 }
+/** What a scan knew about a repository, as the home page states it. */
+export interface RepoScan {
+  owner: string;
+  repo: string;
+  defaultBranch: string | null;
+  environments: string[];
+  classification: "reporting" | "needs-change" | "unsupported" | "no-tests" | null;
+  reporting: string[];
+  unread: Array<{ name: string; format: string }>;
+  runners: Array<{ runner: string; job: string | null; command: string | null }>;
+  scannedAt: string | null;
+}
 export interface OverviewPage {
   range: Range;
   query: string;
   repos: RepoOverview[];
+  /** owner/repo → the repository's last scan; absent key = never scanned. */
+  scans: Record<string, RepoScan>;
   collections: CollectionRow[];
   counts: Record<string, number>;
   repoList: RepoRow[];

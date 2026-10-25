@@ -3,6 +3,7 @@ import { Context, Deferred, Effect, Exit, Layer, Option, Ref as StateRef, Semaph
 import { runAdapters, type FileRef, type RunContext } from "@quality-sh/tag-adapters";
 import { withTags } from "@quality-sh/tag-schema";
 import type { Ref } from "../grouping.ts";
+import { classifyRepository, detectRunners, sniffSample, type UnreadArtifact } from "../scan.ts";
 import { AppConfig } from "./config.ts";
 import {
   ArtifactSource,
@@ -190,6 +191,19 @@ export const layer = Layer.effect(
       return refs;
     });
 
+    const contextOf = (run: RunMeta, artifact: ArtifactMeta): RunContext => ({
+      owner: run.owner,
+      repo: run.repo,
+      runId: run.runId,
+      artifactName: artifact.name,
+      ...(run.branch ? { branch: run.branch } : {}),
+      ...(run.commit ? { commit: run.commit } : {}),
+      ...(run.buildUrl ? { buildUrl: run.buildUrl } : {}),
+      ...(run.timestamp ? { timestamp: run.timestamp } : {}),
+      ...(run.workflow ? { workflow: run.workflow } : {}),
+      ...(run.environment ? { environment: run.environment } : {}),
+    });
+
     const ingestArtifact = Effect.fn("Ingest.ingestArtifact")(function* (
       run: RunMeta,
       artifact: ArtifactMeta,
@@ -198,27 +212,17 @@ export const layer = Layer.effect(
       const { prefix, fetched } = yield* cacheArtifact(artifact);
       if (fetched) acc.cached++;
       const files = yield* filesUnder(prefix);
-      const context: RunContext = {
-        owner: run.owner,
-        repo: run.repo,
-        runId: run.runId,
-        artifactName: artifact.name,
-        ...(run.branch ? { branch: run.branch } : {}),
-        ...(run.commit ? { commit: run.commit } : {}),
-        ...(run.buildUrl ? { buildUrl: run.buildUrl } : {}),
-        ...(run.timestamp ? { timestamp: run.timestamp } : {}),
-        ...(run.workflow ? { workflow: run.workflow } : {}),
-        ...(run.environment ? { environment: run.environment } : {}),
-      };
       const produced = yield* Effect.tryPromise({
-        try: () => runAdapters({ files, context }),
+        try: () => runAdapters({ files, context: contextOf(run, artifact) }),
         catch: (cause) =>
           new ZipError({
             reason: `adapter failed: ${cause instanceof Error ? cause.message : String(cause)}`,
           }),
       });
-      for (const { adapter, reports } of produced) {
-        for (const report of reports) {
+      let reports = 0;
+      for (const { adapter, reports: group } of produced) {
+        for (const report of group) {
+          reports++;
           acc.reports++;
           const r = yield* results.ingest(withTags(report, run.tags ?? []), {
             owner: run.owner,
@@ -230,6 +234,93 @@ export const layer = Layer.effect(
           if (r.inserted) acc.inserted++;
         }
       }
+      return { files, reports };
+    });
+
+    const artifactMetaOf = (row: ResultStore.ArtifactRow): ArtifactMeta => ({
+      artifactId: row.artifactId,
+      owner: row.owner,
+      repo: row.repo,
+      runId: row.runId,
+      name: row.name,
+      sizeBytes: row.sizeBytes,
+      ...(row.expiresAt ? { expiresAt: row.expiresAt } : {}),
+    });
+
+    const isWorkflowPath = (p: string) => /(^|\/)\.github\/workflows\/[^/]+\.ya?ml$/.test(p);
+
+    /**
+     * One scan of a repository: sample the newest artifact per name the adapters have not read,
+     * read the tree's workflows for runners, and store what the repository produces and needs.
+     * Runs come newest first, so the first row seen per name is that name's newest artifact.
+     */
+    const scanRepo = Effect.fn("Ingest.scanRepo")(function* (
+      repo: RepoRef,
+      info: ArtifactSource.RepoInfo,
+      runs: ReadonlyArray<RunMeta>,
+      acc: { reports: number; inserted: number; cached: number },
+    ) {
+      const previous = yield* results.scanOf(repo.owner, repo.repo);
+      const names = yield* results.artifactNames(repo.owner, repo.repo);
+      const indexed = names.map((n) => n.name).sort();
+      if (Option.isSome(previous)) {
+        const known = previous.value.names;
+        if (known.length === indexed.length && indexed.every((n) => known.includes(n))) return;
+      }
+      const reporting = new Set(names.filter((n) => n.reported).map((n) => n.name));
+      const unread: UnreadArtifact[] = [];
+      const pending = new Set(names.filter((n) => !n.reported).map((n) => n.name));
+      const samples: Array<{ run: RunMeta; artifact: ArtifactMeta }> = [];
+      for (const run of runs) {
+        for (const row of yield* results.artifactsOfRun(repo.owner, repo.repo, run.runId)) {
+          if (row.state === "expired" || !pending.delete(row.name)) continue;
+          samples.push({ run, artifact: artifactMetaOf(row) });
+        }
+      }
+      for (const { run, artifact } of samples.slice(0, 10)) {
+        const { files, reports } = yield* ingestArtifact(run, artifact, acc);
+        if (reports > 0) {
+          reporting.add(artifact.name);
+          continue;
+        }
+        const contents = yield* Effect.forEach(files, (f) =>
+          Effect.map(
+            Effect.tryPromise({
+              try: () => f.text(),
+              catch: (cause) => new ZipError({ reason: `read failed: ${String(cause)}` }),
+            }),
+            (text) => ({ path: f.path, text }),
+          ),
+        );
+        const format = sniffSample(contents);
+        if (format !== null && format !== "unknown") unread.push({ name: artifact.name, format });
+      }
+      const paths = yield* source.repoTree(repo);
+      const runners = detectRunners({
+        paths,
+        files: yield* source.repoFiles(repo, paths.filter(isWorkflowPath)),
+      });
+      unread.sort((a, b) => a.name.localeCompare(b.name));
+      const classification = classifyRepository({
+        reporting: [...reporting],
+        unread,
+        runners,
+      });
+      yield* results.upsertScan({
+        owner: repo.owner,
+        repo: repo.repo,
+        defaultBranch: info.defaultBranch,
+        environments: info.environments,
+        classification,
+        reporting: [...reporting].sort(),
+        unread,
+        runners,
+        names: indexed,
+        scannedAt: new Date().toISOString(),
+      });
+      yield* Effect.logInfo(
+        `scan ${repo.owner}/${repo.repo}: ${classification}, ${reporting.size} reporting, ${unread.length} unread, ${runners.length} runners`,
+      );
     });
 
     const ingestRepo = Effect.fn("Ingest.ingestRepo")(function* (
@@ -278,6 +369,16 @@ export const layer = Layer.effect(
         yield* results.upsertRef(ref).pipe(Effect.ignore);
         acc.refs++;
       }
+      // The repository's own default branch and environments, for the scan row and the views.
+      const info = yield* source
+        .repoInfo(repo)
+        .pipe(
+          Effect.catchCause((c) =>
+            recordError(acc.errors, `repoInfo ${repo.owner}/${repo.repo}: ${String(c)}`).pipe(
+              Effect.as(null),
+            ),
+          ),
+        );
       let runsListed = true;
       const runs = yield* source
         .listRuns(
@@ -381,6 +482,13 @@ export const layer = Layer.effect(
       // leaves the walk open, so the next pass takes it up again.
       if (backfill && runsListed && artifacts !== undefined)
         yield* setState("current", runs.length, runs.length);
+      // The scan rides the pass's own semaphore; a failure leaves the last scan row intact.
+      if (info !== null)
+        yield* scanRepo(repo, info, runs, acc).pipe(
+          Effect.catchCause((c) =>
+            recordError(acc.errors, `scan ${repo.owner}/${repo.repo}: ${String(c)}`),
+          ),
+        );
       const after = yield* source.requestStats();
       acc.waits = after.waits - before.waits;
       acc.remaining = after.remaining;

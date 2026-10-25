@@ -4,12 +4,13 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import {
+  withIdentity,
+  validateReport,
   metricsOf,
   tagsOf,
-  validateReport,
-  withIdentity,
   type CtrfReport,
 } from "@quality-sh/tag-schema";
+import type { RunnerFinding, ScanClassification, UnreadArtifact } from "../scan.ts";
 import type { Collection, Ref, ReportLite } from "../grouping.ts";
 import { AppConfig } from "./config.ts";
 import { ArtifactStore } from "./artifact-store.ts";
@@ -104,6 +105,23 @@ export interface RepositoryRow {
   readonly updatedAt: string;
 }
 
+/** What a scan knew about a repository: its branch and environments, then what it found. */
+export interface ScanRow {
+  readonly owner: string;
+  readonly repo: string;
+  readonly defaultBranch: string | null;
+  readonly environments: ReadonlyArray<string>;
+  readonly classification: ScanClassification | null;
+  /** Artifacts whose samples produced a report. */
+  readonly reporting: ReadonlyArray<string>;
+  /** Artifacts holding test output no adapter reads yet. */
+  readonly unread: ReadonlyArray<UnreadArtifact>;
+  readonly runners: ReadonlyArray<RunnerFinding>;
+  /** The indexed artifact names the scan last saw, so a changed set rescans. */
+  readonly names: ReadonlyArray<string>;
+  readonly scannedAt: string | null;
+}
+
 export interface RunFilter {
   readonly owner?: string;
   readonly repo?: string;
@@ -160,6 +178,16 @@ export interface Interface {
   readonly upsertRepository: (
     row: Pick<RepositoryRow, "owner" | "repo" | "state" | "backfillDone" | "backfillTotal">,
   ) => Effect.Effect<void, DbError>;
+  /** Save what a scan knew about a repository, keyed owner/repo. */
+  readonly upsertScan: (row: ScanRow) => Effect.Effect<void, DbError>;
+  /** Every scan row, for the routes that prefer a repository's own default branch. */
+  readonly scans: () => Effect.Effect<ReadonlyArray<ScanRow>, DbError>;
+  readonly scanOf: (owner: string, repo: string) => Effect.Effect<Option.Option<ScanRow>, DbError>;
+  /** Every indexed artifact name of a repository, and whether a report came from it. */
+  readonly artifactNames: (
+    owner: string,
+    repo: string,
+  ) => Effect.Effect<ReadonlyArray<{ name: string; reported: boolean }>, DbError>;
   /** After a sweep: the files are gone, so the row is "listed" again, or "expired" when the source is too. */
   readonly markArtifactSwept: (
     artifactId: string,
@@ -231,6 +259,12 @@ CREATE TABLE IF NOT EXISTS runs_seen (
 CREATE TABLE IF NOT EXISTS repositories (
   owner TEXT NOT NULL, repo TEXT NOT NULL, state TEXT NOT NULL, backfill_done INTEGER NOT NULL DEFAULT 0,
   backfill_total INTEGER, first_seen_at TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (owner, repo)
+);
+CREATE TABLE IF NOT EXISTS repo_scan (
+  owner TEXT NOT NULL, repo TEXT NOT NULL,
+  default_branch TEXT, environments TEXT NOT NULL,
+  classification TEXT, reporting TEXT, unread TEXT, runners TEXT, names TEXT, scanned_at TEXT,
+  PRIMARY KEY (owner, repo)
 );
 CREATE TABLE IF NOT EXISTS report_tags (report_id TEXT NOT NULL, tag TEXT NOT NULL, PRIMARY KEY (report_id, tag));
 CREATE INDEX IF NOT EXISTS report_tags_tag ON report_tags(tag);
@@ -558,6 +592,87 @@ export const make = (db: Database, store: ArtifactStore.Interface): Interface =>
       });
     });
 
+  const SCAN_COLS = `owner, repo, default_branch AS defaultBranch, environments, classification, reporting, unread, runners, names, scanned_at AS scannedAt`;
+
+  /** JSON list columns decode to arrays; an empty string is the empty list. */
+  const scanRow = (r: {
+    owner: string;
+    repo: string;
+    defaultBranch: string | null;
+    environments: string;
+    classification: string | null;
+    reporting: string;
+    unread: string;
+    runners: string;
+    names: string;
+    scannedAt: string | null;
+  }): ScanRow => ({
+    owner: r.owner,
+    repo: r.repo,
+    defaultBranch: r.defaultBranch,
+    environments: JSON.parse(r.environments || "[]") as ReadonlyArray<string>,
+    classification: (r.classification as ScanRow["classification"]) ?? null,
+    reporting: JSON.parse(r.reporting || "[]") as ReadonlyArray<string>,
+    unread: JSON.parse(r.unread || "[]") as ReadonlyArray<UnreadArtifact>,
+    runners: JSON.parse(r.runners || "[]") as ReadonlyArray<RunnerFinding>,
+    names: JSON.parse(r.names || "[]") as ReadonlyArray<string>,
+    scannedAt: r.scannedAt,
+  });
+
+  const upsertScan = (row: ScanRow) =>
+    trySync("upsertScan", () => {
+      db.query<unknown, Params>(
+        `INSERT INTO repo_scan (owner, repo, default_branch, environments, classification, reporting, unread, runners, names, scanned_at)
+         VALUES ($owner, $repo, $defaultBranch, $environments, $classification, $reporting, $unread, $runners, $names, $scannedAt)
+         ON CONFLICT(owner, repo) DO UPDATE SET default_branch = excluded.default_branch, environments = excluded.environments,
+           classification = excluded.classification, reporting = excluded.reporting, unread = excluded.unread,
+           runners = excluded.runners, names = excluded.names, scanned_at = excluded.scanned_at`,
+      ).run({
+        $owner: row.owner,
+        $repo: row.repo,
+        $defaultBranch: row.defaultBranch,
+        $environments: JSON.stringify(row.environments),
+        $classification: row.classification,
+        $reporting: JSON.stringify(row.reporting),
+        $unread: JSON.stringify(row.unread),
+        $runners: JSON.stringify(row.runners),
+        $names: JSON.stringify(row.names),
+        $scannedAt: row.scannedAt,
+      });
+    });
+
+  const scans = () =>
+    trySync("scans", () =>
+      db
+        .query<Parameters<typeof scanRow>[0], []>(
+          `SELECT ${SCAN_COLS} FROM repo_scan ORDER BY owner, repo`,
+        )
+        .all()
+        .map(scanRow),
+    );
+
+  const scanOf = (owner: string, repo: string) =>
+    trySync("scanOf", () => {
+      const row = db
+        .query<Parameters<typeof scanRow>[0], [string, string]>(
+          `SELECT ${SCAN_COLS} FROM repo_scan WHERE owner = ? AND repo = ?`,
+        )
+        .get(owner, repo);
+      return row === undefined || row === null ? Option.none<ScanRow>() : Option.some(scanRow(row));
+    });
+
+  const artifactNames = (owner: string, repo: string) =>
+    trySync("artifactNames", () =>
+      db
+        .query<{ name: string; reported: number }, [string, string]>(
+          `SELECT a.name, EXISTS(SELECT 1 FROM reports r
+             WHERE r.owner = a.owner AND r.repo = a.repo AND r.artifact_name = a.name) AS reported
+           FROM artifacts a WHERE a.owner = ? AND a.repo = ? GROUP BY a.name ORDER BY a.name`,
+        )
+        .all(owner, repo)
+        .map((r) => ({ name: r.name, reported: r.reported === 1 })),
+    );
+
   const artifactsOfRun = (owner: string, repo: string, runId: string) =>
     trySync("artifactsOfRun", () =>
       db
@@ -753,6 +868,10 @@ export const make = (db: Database, store: ArtifactStore.Interface): Interface =>
     repository,
     repositories,
     upsertRepository,
+    upsertScan,
+    scans,
+    scanOf,
+    artifactNames,
     cachedArtifactsBefore,
     markArtifactSwept,
     repos,

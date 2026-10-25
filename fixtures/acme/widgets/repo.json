@@ -1,0 +1,4 @@
+{
+  "defaultBranch": "develop",
+  "environments": ["production", "staging"]
+}

@@ -104,4 +104,16 @@ describe("fixture source", () => {
     const entries = extractZip(zip);
     expect(entries.map((e) => e.path)).toEqual(["results.xml"]);
   });
+  test("reads the repository's own default branch and environments", async () => {
+    expect(await run(src.repoInfo({ owner: "acme", repo: "widgets" }))).toEqual({
+      defaultBranch: "develop",
+      environments: ["production", "staging"],
+    });
+  });
+  test("a repository that says nothing has neither", async () => {
+    expect(await run(src.repoInfo({ owner: "acme", repo: "ghost" }))).toEqual({
+      defaultBranch: null,
+      environments: [],
+    });
+  });
 });

@@ -1,0 +1,7 @@
+{
+  "runId": "run-1",
+  "workflow": "tests",
+  "branch": "main",
+  "commit": "a1b2c3d",
+  "timestamp": "2026-10-25T08:00:00Z"
+}
