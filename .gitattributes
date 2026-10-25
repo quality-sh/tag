@@ -1,0 +1,3 @@
+# Test fixtures are captured tool output (Playwright reports, trace viewer bundles),
+# not source: keep them out of language stats and collapsed in diffs.
+fixtures/** linguist-generated
