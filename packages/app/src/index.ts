@@ -58,14 +58,11 @@ const BootIngest = Layer.effectDiscard(
 const Servers = Layer.unwrap(
   Effect.gen(function* () {
     const cfg = yield* AppConfig.Service;
-    // An ingest or a sweep answers when it is done, which can take minutes on a busy org;
-    // Bun drops a connection after 10 idle seconds unless told otherwise (255 is its ceiling).
-    const idleTimeout = 255;
     const dashboard = HttpRouter.serve(App(WEB_ROOT)).pipe(
-      Layer.provide(BunHttpServer.layer({ port: cfg.port, idleTimeout })),
+      Layer.provide(BunHttpServer.layer({ port: cfg.port })),
     );
     const artifacts = HttpRouter.serve(ArtifactApp).pipe(
-      Layer.provide(BunHttpServer.layer({ port: cfg.artifactPort, idleTimeout })),
+      Layer.provide(BunHttpServer.layer({ port: cfg.artifactPort })),
     );
     yield* Effect.logInfo(
       `dashboard on http://localhost:${cfg.port}  artifacts on http://localhost:${cfg.artifactPort}`,

@@ -5,6 +5,7 @@ import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { useAtom, useAtomValue } from "@effect/atom-react/Hooks";
 import {
   Cmd,
+  K,
   Empty,
   Link,
   RailGroup,
@@ -117,6 +118,18 @@ export function ScopePage({ scope, q, range }: { scope: Scope; q: string; range:
             <Cmd small onClick={() => runIngest()} disabled={ingesting}>
               {ingesting ? "checking…" : "check for new runs"}
             </Cmd>
+            {!ingesting && AsyncResult.isSuccess(ingest) && (
+              <span role="status">
+                <K>
+                  {ingest.value.inserted} new reports · {ingest.value.errors.length} errors
+                </K>
+              </span>
+            )}
+            {!ingesting && AsyncResult.isFailure(ingest) && (
+              <span role="status">
+                <K tone="bad">Check failed. Try again.</K>
+              </span>
+            )}
           </Toolbar>
         </Space>
         <Search
