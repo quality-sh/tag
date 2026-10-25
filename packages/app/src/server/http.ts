@@ -449,17 +449,19 @@ export const ApiRoutes = HttpRouter.use((router) =>
 
     yield* router.add("POST", "/api/retention/sweep", () => Effect.map(retention.sweep(), json));
 
+    yield* router.add("GET", "/api/ingest/status", () => Effect.map(ingest.status(), json));
+
     yield* router.add("POST", "/api/ingest", () =>
       Effect.gen(function* () {
         const body = yield* HttpServerRequest.schemaBodyJson(IngestBody).pipe(
           Effect.orElseSucceed((): typeof IngestBody.Type => ({})),
         );
         const opts = body.limit !== undefined ? { limit: body.limit } : {};
-        const summary =
-          body.owner && body.repo
-            ? yield* ingest.ingestRepo({ owner: body.owner, repo: body.repo }, opts)
-            : yield* ingest.ingestAll(opts);
-        return json(summary);
+        const pass = yield* ingest.start(
+          body.owner && body.repo ? { owner: body.owner, repo: body.repo } : undefined,
+          opts,
+        );
+        return json(pass, 202);
       }),
     );
 
