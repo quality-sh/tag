@@ -11,3 +11,4 @@ fixtures/
 .data*/
 # Test coverage reports
 coverage/
+.beads/
