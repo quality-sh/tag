@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+
+if [ -x '/home/ben/Documents/repos/tag/.beads/hooks'/post-rewrite ]; then '/home/ben/Documents/repos/tag/.beads/hooks'/post-rewrite "$@"; fi

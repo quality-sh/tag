@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+'/home/ben/Documents/repos/tag/.git/worktrees/7b10c1c432f79a6f/workflowd-hooks/identity-guard' commit
+if [ -x '/home/ben/Documents/repos/tag/.beads/hooks'/commit-msg ]; then '/home/ben/Documents/repos/tag/.beads/hooks'/commit-msg "$@"; fi

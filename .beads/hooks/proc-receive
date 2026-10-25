@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+
+if [ -x '/home/ben/Documents/repos/tag/.beads/hooks'/proc-receive ]; then '/home/ben/Documents/repos/tag/.beads/hooks'/proc-receive "$@"; fi

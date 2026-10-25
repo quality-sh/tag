@@ -118,7 +118,7 @@ table, sectioned by repository. A group page keeps the same figures and adds fai
 tests, common errors, runs and flaky tests. New views should reuse `SearchBar`, `Shell`,
 `RailGroup`, `Strip`, `Spark`, `Delta` and `Table` with `sections` from `packages/ui`.
 
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:6cd5cc61 -->
+<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:970c3bf2 -->
 ## Beads Issue Tracker
 
 This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
@@ -162,6 +162,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
    # Team-maintainer opt-in only, unless current instructions forbid it:
    git pull --rebase
+   bd dolt push
    git push
    git status
    ```

@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+
+if [ -x '/home/ben/Documents/repos/tag/.beads/hooks'/p4-pre-submit ]; then '/home/ben/Documents/repos/tag/.beads/hooks'/p4-pre-submit "$@"; fi
