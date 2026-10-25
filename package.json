@@ -19,8 +19,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "knip": "knip",
+    "file-length": "bun scripts/check-file-length.mjs",
     "audit": "bun audit --audit-level=high",
-    "check": "bun run typecheck && bun run effect:check && bun run lint && bun run format:check && bun run knip && bun test"
+    "check": "bun run typecheck && bun run effect:check && bun run lint && bun run format:check && bun run knip && bun run file-length && bun test"
   },
   "devDependencies": {
     "@effect/language-service": "^0.87.5",

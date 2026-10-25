@@ -28,6 +28,8 @@ jobs:
             command: bun run format:check
           - name: Knip
             command: bun run knip
+          - name: File length
+            command: bun run file-length
           - name: Dependency audit
             command: bun run audit
           - name: Web bundle

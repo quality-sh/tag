@@ -89,6 +89,9 @@ scripts/            CI helpers: effect diagnostics, changed-line coverage
   the local `effect` and `architecture` plugins. `--max-warnings=0`.
 - Knip keeps exports, files and dependencies used; a config hint is an error.
 - `bun audit --audit-level=high` must pass.
+- A source file stays under 500 lines; `bun run file-length` enforces it. Files already
+  over the limit are listed in `scripts/file-length-baseline.json` with their size and may
+  only shrink; split one and drop it from the baseline (`--write-baseline` rewrites it).
 
 ## Writing
 
