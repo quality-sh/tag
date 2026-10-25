@@ -222,6 +222,14 @@ export const checkForNewRuns = Effect.fn("web.checkForNewRuns")(function* () {
 
 export const ingestFn = runtime.fn(() => checkForNewRuns()).pipe(Atom.keepAlive);
 
+/** Every repository's ingest state; pages poll it while one is still backfilling. */
+export const repositoriesAtom = runtime
+  .atom(withApi((api) => api.repositories()))
+  .pipe(Atom.withReactivity(keys.runs), Atom.keepAlive);
+
+/** Re-read every run-derived atom, as a backfill lands reports without a check. */
+export const refreshRunsFn = runtime.fn(() => Reactivity.invalidate(keys.runs));
+
 export const createCollectionFn = runtime.fn(
   (input: { name: string; description: string; query: string }) =>
     withApi((api) => api.createCollection(input)),

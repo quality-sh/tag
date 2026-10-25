@@ -19,7 +19,8 @@ import {
   TopbarAction,
 } from "@quality-sh/tag-ui";
 import { GROUP_BY_INFO, RANGES, type GroupBy, type Range } from "../grouping.ts";
-import type { OverviewPage as Overview } from "./client.ts";
+import { BackfillStatus, backfillOf, useBackfilling } from "./backfill.tsx";
+import type { OverviewPage as Overview, RepositoryState } from "./client.ts";
 import { Loaded, SignOut, cap } from "./common.tsx";
 import { GroupsTable, Rail, Search, scopeCrumbs } from "./home.tsx";
 import { Repository } from "./overview.tsx";
@@ -62,6 +63,9 @@ export function ScopePage({ scope, q, range }: { scope: Scope; q: string; range:
   const data = AsyncResult.isSuccess(result) ? result.value : undefined;
   const [ingest, runIngest] = useAtom(ingestFn);
   const ingesting = AsyncResult.isWaiting(ingest);
+  const backfilling = useBackfilling().filter(
+    (s) => scope.kind !== "repo" || (s.owner === scope.owner && s.repo === scope.repo),
+  );
   const title =
     scope.kind === "collection"
       ? (data?.collections.find((x) => x.id === scope.id)?.name ?? scope.id)
@@ -130,6 +134,7 @@ export function ScopePage({ scope, q, range }: { scope: Scope; q: string; range:
                 <K tone="bad">Check failed. Try again.</K>
               </span>
             )}
+            <BackfillStatus states={backfilling} />
           </Toolbar>
         </Space>
         <Search
@@ -137,7 +142,9 @@ export function ScopePage({ scope, q, range }: { scope: Scope; q: string; range:
           label={`Filter ${scope.kind === "repo" ? `${scope.owner}/${scope.repo}` : title}`}
           onQuery={(next) => go(href.scope(scope, { q: next, range }))}
         />
-        <Loaded result={result}>{(d) => <Repositories d={d} range={range} />}</Loaded>
+        <Loaded result={result}>
+          {(d) => <Repositories d={d} range={range} states={backfilling} />}
+        </Loaded>
         {SECTIONS.map((by) => (
           <ViewSection
             key={by}
@@ -153,11 +160,23 @@ export function ScopePage({ scope, q, range }: { scope: Scope; q: string; range:
   );
 }
 
-function Repositories({ d, range }: { d: Overview; range: Range }) {
+function Repositories({
+  d,
+  range,
+  states,
+}: {
+  d: Overview;
+  range: Range;
+  states: ReadonlyArray<RepositoryState>;
+}) {
   if (d.repos.length === 0)
     return (
       <Space top={26}>
-        <Empty>No runs in this range. Widen it, loosen the filters, or check for new runs.</Empty>
+        <Empty>
+          {states.length > 0
+            ? "Backfilling this repository. Its runs appear as they land."
+            : "No runs in this range. Widen it, loosen the filters, or check for new runs."}
+        </Empty>
       </Space>
     );
   return (
@@ -169,6 +188,7 @@ function Repositories({ d, range }: { d: Overview; range: Range }) {
           range={range}
           first={i === 0}
           link={d.repos.length > 1}
+          state={backfillOf(states, r.owner, r.repo)}
         />
       ))}
     </>

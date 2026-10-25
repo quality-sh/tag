@@ -23,7 +23,7 @@ export default tseslint.config(
       // Recorded CI artifacts the adapters read
       "fixtures/**",
       // Local data, S3 cache and SQLite
-      ".data/**",
+      ".data*/**",
       "coverage/**",
     ],
   },

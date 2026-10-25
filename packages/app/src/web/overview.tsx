@@ -27,6 +27,8 @@ import {
   type StripItem,
 } from "@quality-sh/tag-ui";
 import { RANGES, type Range, type RecentRun, type RepoOverview } from "../grouping.ts";
+import { BackfillStatus, backfillOf, progressText, useBackfilling } from "./backfill.tsx";
+import type { RepositoryState } from "./client.ts";
 import { Loaded, SignOut } from "./common.tsx";
 import { CollectionsTable, Rail } from "./home.tsx";
 import { href, ingestFn, overviewAtom, overviewKey } from "./state.ts";
@@ -38,6 +40,7 @@ export function OverviewPage({ range }: { range: Range }) {
   const data = AsyncResult.isSuccess(result) ? result.value : undefined;
   const [ingest, runIngest] = useAtom(ingestFn);
   const ingesting = AsyncResult.isWaiting(ingest);
+  const backfilling = useBackfilling();
   return (
     <>
       <Topbar
@@ -81,6 +84,7 @@ export function OverviewPage({ range }: { range: Range }) {
                 <K tone="bad">Check failed. Try again.</K>
               </span>
             )}
+            <BackfillStatus states={backfilling} />
           </Toolbar>
         </Space>
         <Loaded result={result}>
@@ -90,7 +94,14 @@ export function OverviewPage({ range }: { range: Range }) {
                 <Empty>No runs in this range. Widen it, or check for new runs.</Empty>
               )}
               {d.repos.map((r, i) => (
-                <Repository key={`${r.owner}/${r.repo}`} r={r} range={range} first={i === 0} link />
+                <Repository
+                  key={`${r.owner}/${r.repo}`}
+                  r={r}
+                  range={range}
+                  first={i === 0}
+                  link
+                  state={backfillOf(backfilling, r.owner, r.repo)}
+                />
               ))}
               {d.collections.length > 0 && (
                 <Section eyebrow="Collections" count={plural(d.collections.length, "collection")}>
@@ -111,11 +122,14 @@ export function Repository({
   range,
   first,
   link,
+  state,
 }: {
   r: RepoOverview;
   range: Range;
   first: boolean;
   link?: boolean;
+  /** Its ingest state, when it is still backfilling. */
+  state?: RepositoryState | undefined;
 }) {
   const main = r.main.run;
   const view = { range, q: `repo:${r.owner}/${r.repo}` };
@@ -268,13 +282,21 @@ export function Repository({
   return (
     <Section
       eyebrow={
-        link ? (
-          <Link ink href={href.scope(scope, { range })}>
-            {r.owner}/{r.repo} →
-          </Link>
-        ) : (
-          `${r.owner}/${r.repo}`
-        )
+        <>
+          {link ? (
+            <Link ink href={href.scope(scope, { range })}>
+              {r.owner}/{r.repo} →
+            </Link>
+          ) : (
+            `${r.owner}/${r.repo}`
+          )}
+          {state && state.state !== "current" && (
+            <>
+              {" · "}
+              <K tone="dim">{progressText(state)}</K>
+            </>
+          )}
+        </>
       }
       count={<Link href={href.home({ ...view, by: "run" })}>{plural(r.runs, "run")}</Link>}
       first={first}

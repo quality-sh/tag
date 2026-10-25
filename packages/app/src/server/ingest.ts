@@ -1,5 +1,5 @@
 // The pipeline: source -> zip -> store -> adapters -> result store. Idempotent at every step.
-import { Context, Deferred, Effect, Exit, Layer, Ref as StateRef, Semaphore } from "effect";
+import { Context, Deferred, Effect, Exit, Layer, Option, Ref as StateRef, Semaphore } from "effect";
 import { runAdapters, type FileRef, type RunContext } from "@quality-sh/tag-adapters";
 import { withTags } from "@quality-sh/tag-schema";
 import type { Ref } from "../grouping.ts";
@@ -99,6 +99,7 @@ export const artifactPrefix = (a: { owner: string; repo: string; artifactId: str
   `artifacts/${a.owner}/${a.repo}/${a.artifactId}/`;
 
 const COMPLETE = ".complete";
+const DAY = 86_400_000;
 
 export const layer = Layer.effect(
   Service,
@@ -247,6 +248,25 @@ export const layer = Layer.effect(
         cached: 0,
         errors: [] as string[],
       };
+      // First sight, or a walk cut short earlier: take every run inside the retention window,
+      // newest first, and record progress so the pages can show it and a restart resumes it.
+      const known = yield* results
+        .repository(repo.owner, repo.repo)
+        .pipe(Effect.catchCause(() => Effect.succeed(Option.none<ResultStore.RepositoryRow>())));
+      const backfill = !opts?.branch && (Option.isNone(known) || known.value.state !== "current");
+      const setState = (
+        state: ResultStore.RepositoryRow["state"],
+        backfillDone: number,
+        backfillTotal: number | null,
+      ) =>
+        results
+          .upsertRepository({ ...repo, state, backfillDone, backfillTotal })
+          .pipe(Effect.ignore);
+      if (Option.isNone(known)) yield* setState("new", 0, null);
+      const since =
+        backfill && cfg.artifactRetentionDays > 0
+          ? new Date(Date.now() - cfg.artifactRetentionDays * DAY).toISOString()
+          : undefined;
       const refs = yield* source.listRefs(repo).pipe(
         Effect.catchCause((c) => {
           return recordError(acc.errors, `listRefs ${repo.owner}/${repo.repo}: ${String(c)}`).pipe(
@@ -258,19 +278,25 @@ export const layer = Layer.effect(
         yield* results.upsertRef(ref).pipe(Effect.ignore);
         acc.refs++;
       }
+      let runsListed = true;
       const runs = yield* source
-        .listRuns(repo, {
-          limit: opts?.limit ?? 20,
-          ...(opts?.branch ? { branch: opts.branch } : {}),
-        })
+        .listRuns(
+          repo,
+          backfill
+            ? { limit: Infinity, ...(since ? { since } : {}) }
+            : { limit: opts?.limit ?? 20, ...(opts?.branch ? { branch: opts.branch } : {}) },
+        )
         .pipe(
           Effect.catchCause((c) => {
+            runsListed = false;
             return recordError(
               acc.errors,
               `listRuns ${repo.owner}/${repo.repo}: ${String(c)}`,
             ).pipe(Effect.as([] as ReadonlyArray<RunMeta>));
           }),
         );
+      const progress = { done: 0 };
+      if (backfill && runsListed) yield* setState("backfilling", 0, runs.length);
       const seen = yield* results
         .seenRuns(repo.owner, repo.repo)
         .pipe(Effect.catchCause(() => Effect.succeed(new Set<string>() as ReadonlySet<string>)));
@@ -345,9 +371,16 @@ export const layer = Layer.effect(
             Effect.catch((error) => {
               return recordError(acc.errors, `index ${run.runId}: ${String(error)}`);
             }),
+            Effect.andThen(() =>
+              backfill ? setState("backfilling", ++progress.done, runs.length) : Effect.void,
+            ),
           ),
         { concurrency: 4, discard: true },
       );
+      // Caught up once every run in the window has its artifacts indexed. A failed listing
+      // leaves the walk open, so the next pass takes it up again.
+      if (backfill && runsListed && artifacts !== undefined)
+        yield* setState("current", runs.length, runs.length);
       const after = yield* source.requestStats();
       acc.waits = after.waits - before.waits;
       acc.remaining = after.remaining;
@@ -451,7 +484,6 @@ export const layer = Layer.effect(
       }
       return yield* Deferred.await(launched.job.done);
     });
-    void cfg;
     return Service.of({
       start: Effect.fn("Ingest.start")(function* (repo, opts) {
         const { job } = yield* launch(repo, opts);

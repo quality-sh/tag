@@ -135,6 +135,14 @@ export interface RepoRow {
   repo: string;
   reports: number;
 }
+/** Where ingest stands with a repository: first sight, walking its history, or caught up. */
+export interface RepositoryState {
+  owner: string;
+  repo: string;
+  state: "new" | "backfilling" | "current";
+  backfillDone: number;
+  backfillTotal: number | null;
+}
 export interface RunFilter {
   readonly owner?: string | undefined;
   readonly repo?: string | undefined;
@@ -216,6 +224,10 @@ export interface Interface {
   ) => Effect.Effect<{ url: string; cached: boolean }, ApiError | Unauthorized>;
   readonly ingest: () => Effect.Effect<{ readonly passId: string }, ApiError | Unauthorized>;
   readonly ingestStatus: () => Effect.Effect<IngestStatus, ApiError | Unauthorized>;
+  readonly repositories: () => Effect.Effect<
+    ReadonlyArray<RepositoryState>,
+    ApiError | Unauthorized
+  >;
   readonly overview: (q: OverviewQuery) => Effect.Effect<OverviewPage, ApiError | Unauthorized>;
   readonly groups: (q: GroupsQuery) => Effect.Effect<GroupsPage, ApiError | Unauthorized>;
   readonly group: (
@@ -308,6 +320,7 @@ const make = Effect.gen(function* () {
       ),
     ingest: () => post<{ readonly passId: string }>("/api/ingest", {}),
     ingestStatus: () => get<IngestStatus>("/api/ingest/status"),
+    repositories: () => get<ReadonlyArray<RepositoryState>>("/api/repositories"),
     overview: (o) => get<OverviewPage>(`/api/overview${query({ range: o.range, q: o.q, c: o.c })}`),
     groups: (g) =>
       get<GroupsPage>(`/api/groups${query({ by: g.by, q: g.q, range: g.range, c: g.c })}`),
