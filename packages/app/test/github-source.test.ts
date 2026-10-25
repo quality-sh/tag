@@ -210,6 +210,8 @@ describe("GitHubSource", () => {
     const downloads: number[] = [];
     const zip = buildZip([]);
     const gh = fakeGithub({
+      "/repos/acme/widgets": () => ({ default_branch: "main" }),
+      "/repos/acme/widgets/environments": () => ({ environments: [] }),
       "/repos/acme/widgets/releases": () => [],
       "/repos/acme/widgets/tags": () => [],
       "/repos/acme/widgets/pulls": () => [],
@@ -776,5 +778,46 @@ describe("GitHubSource", () => {
     ]);
     expect(gh.hits[0]?.auth?.split(".").length).toBe(3);
     expect(gh.hits[1]?.auth).toBe("Bearer ghs_installation");
+  });
+
+  test("reads the repository's default branch and environments", async () => {
+    const gh = fakeGithub({
+      "/repos/acme/widgets": () => ({ default_branch: "trunk" }),
+      "/repos/acme/widgets/environments": () => ({
+        environments: [{ name: "production" }, { name: "staging" }],
+      }),
+    });
+    const info = await using(sourceWith(cfg(), gh.layer), (s) =>
+      s.repoInfo({ owner: "acme", repo: "widgets" }),
+    );
+    expect(info).toEqual({
+      defaultBranch: "trunk",
+      environments: ["production", "staging"],
+    });
+    expect(gh.hits.map((h) => h.url.pathname)).toEqual([
+      "/repos/acme/widgets",
+      "/repos/acme/widgets/environments",
+    ]);
+  });
+
+  test("an unreadable environments endpoint leaves the branch with no environments", async () => {
+    const gh = fakeGithub({
+      "/repos/acme/widgets": () => ({ default_branch: "trunk" }),
+    });
+    const info = await using(sourceWith(cfg(), gh.layer), (s) =>
+      s.repoInfo({ owner: "acme", repo: "widgets" }),
+    );
+    expect(info).toEqual({ defaultBranch: "trunk", environments: [] });
+  });
+
+  test("a repository without a default_branch says null", async () => {
+    const gh = fakeGithub({
+      "/repos/acme/widgets": () => ({}),
+      "/repos/acme/widgets/environments": () => ({ environments: [] }),
+    });
+    const info = await using(sourceWith(cfg(), gh.layer), (s) =>
+      s.repoInfo({ owner: "acme", repo: "widgets" }),
+    );
+    expect(info).toEqual({ defaultBranch: null, environments: [] });
   });
 });

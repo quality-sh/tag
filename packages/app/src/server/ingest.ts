@@ -278,6 +278,31 @@ export const layer = Layer.effect(
         yield* results.upsertRef(ref).pipe(Effect.ignore);
         acc.refs++;
       }
+      // The repository's own default branch and environments, for the views that compare runs.
+      const info = yield* source
+        .repoInfo(repo)
+        .pipe(
+          Effect.catchCause((c) =>
+            recordError(acc.errors, `repoInfo ${repo.owner}/${repo.repo}: ${String(c)}`).pipe(
+              Effect.as(null),
+            ),
+          ),
+        );
+      if (info !== null)
+        yield* results
+          .upsertScan({
+            owner: repo.owner,
+            repo: repo.repo,
+            defaultBranch: info.defaultBranch,
+            environments: info.environments,
+            classification: null,
+            reporting: [],
+            unread: [],
+            runners: [],
+            names: [],
+            scannedAt: null,
+          })
+          .pipe(Effect.ignore);
       let runsListed = true;
       const runs = yield* source
         .listRuns(

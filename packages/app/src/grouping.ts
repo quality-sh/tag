@@ -539,6 +539,8 @@ export interface GroupInput {
   readonly since?: string | undefined;
   readonly trendPoints?: number | undefined;
   readonly defaultBranch?: string | undefined;
+  /** owner/repo → default branch from the repository API; wins per repo over the guess. */
+  readonly defaultBranches?: Readonly<Record<string, string>> | undefined;
 }
 
 interface Bucket {
@@ -669,6 +671,7 @@ export function computeGroups(input: GroupInput): GroupRow[] {
     allRunsByRepo.set(k, [...(allRunsByRepo.get(k) ?? []), run]);
   }
   const defaultBranchFor = (owner: string, repo: string) =>
+    input.defaultBranches?.[`${owner}/${repo}`] ??
     input.defaultBranch ??
     defaultBranchOf(allRunsByRepo.get(`${owner}/${repo}`) ?? [], input.refs, { owner, repo });
 
@@ -954,6 +957,8 @@ export function computeOverview(input: {
   readonly refs: ReadonlyArray<Ref>;
   readonly since?: string | undefined;
   readonly recent?: number | undefined;
+  /** owner/repo → default branch from the repository API; wins per repo over the guess. */
+  readonly defaultBranches?: Readonly<Record<string, string>> | undefined;
 }): RepoOverview[] {
   const { refs } = input;
   const recentN = input.recent ?? 8;
@@ -971,7 +976,8 @@ export function computeOverview(input: {
     if (!first) continue;
     const { owner, repo } = first;
     const runs = runsOf(reports);
-    const defaultBranch = defaultBranchOf(runs, refs, { owner, repo });
+    const defaultBranch =
+      input.defaultBranches?.[`${owner}/${repo}`] ?? defaultBranchOf(runs, refs, { owner, repo });
     const mainRuns = runs.filter((r) => r.branch === defaultBranch);
     const mainRun = mainRuns[0] ?? null;
     const before = mainRuns[1];

@@ -99,6 +99,11 @@ const Deployment = Schema.Struct({
 });
 const InstallationToken = Schema.Struct({ token: Schema.String, expires_at: Schema.String });
 
+const RepoDetail = Schema.Struct({ default_branch: Nullable(Schema.String) });
+const Environments = Schema.Struct({
+  environments: Schema.Array(Schema.Struct({ name: Schema.String })),
+});
+
 const headerNumber = (value: string | undefined): number | undefined => {
   if (value === undefined || value.trim() === "") return undefined;
   const number = Number(value);
@@ -545,6 +550,26 @@ export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig)
     return out;
   });
 
+  const repoInfo = Effect.fn("GitHubSource.repoInfo")(function* (repo: RepoRef) {
+    const detail = yield* getJson(
+      repoPath(repo),
+      RepoDetail,
+      "repoInfo",
+      `${repo.owner}/${repo.repo}`,
+    );
+    // Environments are a nicety: an endpoint that will not answer them leaves the list empty.
+    const envs = yield* getJson(
+      `${repoPath(repo)}/environments`,
+      Environments,
+      "repoInfo",
+      `${repo.owner}/${repo.repo} environments`,
+    ).pipe(Effect.option);
+    return {
+      defaultBranch: detail.default_branch ?? null,
+      environments: Option.isSome(envs) ? envs.value.environments.map((e) => e.name) : [],
+    };
+  });
+
   // The zip endpoint answers 302 to a signed blob URL. Fetch would follow it and may carry
   // the token across origins, so read the redirect by hand and fetch the blob bare.
   const openArtifact = Effect.fn("GitHubSource.openArtifact")(function* (artifact: ArtifactMeta) {
@@ -576,6 +601,7 @@ export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig)
     kind: "github",
     requestStats,
     repos,
+    repoInfo,
     listRuns,
     listArtifacts,
     listRepoArtifacts,

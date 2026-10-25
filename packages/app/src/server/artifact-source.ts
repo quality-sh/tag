@@ -43,6 +43,11 @@ export interface ArtifactMeta extends RepoRef {
   readonly commit?: string;
 }
 
+export interface RepoInfo {
+  readonly defaultBranch: string | null;
+  readonly environments: ReadonlyArray<string>;
+}
+
 export interface Interface {
   readonly kind: "fixtures" | "github";
   /** Cumulative rate-limit waits and the last reported request allowance. */
@@ -51,6 +56,8 @@ export interface Interface {
     readonly remaining: number | null;
   }>;
   readonly repos: () => Effect.Effect<ReadonlyArray<RepoRef>, SourceError>;
+  /** The repository's default branch and environments from the source's own API. */
+  readonly repoInfo: (repo: RepoRef) => Effect.Effect<RepoInfo, SourceError>;
   /** Completed runs, newest first. `since` keeps only runs created at or after that ISO time. */
   readonly listRuns: (
     repo: RepoRef,
@@ -98,6 +105,13 @@ const RefsJson = Schema.Array(
   }),
 );
 const decodeRefs = Schema.decodeUnknownResult(RefsJson);
+
+/** The repository's own words about itself; everything but the name is optional. */
+const RepoJson = Schema.Struct({
+  defaultBranch: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  environments: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+const decodeRepoJson = Schema.decodeUnknownResult(RepoJson);
 
 const srcError = (operation: string, detail: string) => (cause: unknown) =>
   new SourceError({ operation, detail, cause });
@@ -251,6 +265,21 @@ export const makeFixtures = (dir: string): Interface => {
       catch: srcError("listRefs", `${repo.owner}/${repo.repo}`),
     });
 
+  const repoInfo = (repo: RepoRef) =>
+    Effect.tryPromise({
+      try: async () => {
+        const file = Bun.file(join(dir, repo.owner, repo.repo, "repo.json"));
+        if (!(await file.exists())) return { defaultBranch: null, environments: [] };
+        const r = decodeRepoJson(await file.json());
+        if (r._tag === "Failure") throw new Error(String(r.failure));
+        return {
+          defaultBranch: r.success.defaultBranch ?? null,
+          environments: r.success.environments ?? [],
+        };
+      },
+      catch: srcError("repoInfo", `${repo.owner}/${repo.repo}`),
+    });
+
   const openArtifact = (artifact: ArtifactMeta) =>
     Effect.tryPromise({
       try: async () =>
@@ -264,6 +293,7 @@ export const makeFixtures = (dir: string): Interface => {
     kind: "fixtures",
     requestStats: () => Effect.succeed({ waits: 0, remaining: null }),
     repos,
+    repoInfo,
     listRuns,
     listArtifacts,
     listRepoArtifacts,

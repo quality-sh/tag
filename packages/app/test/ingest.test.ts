@@ -177,6 +177,27 @@ describe("ingest pipeline (fixtures -> fs store -> sqlite)", () => {
     );
   });
 
+  test("a repository that will not say its default branch records the error and keeps going", async () => {
+    const fixtures = ArtifactSource.makeFixtures(FIXTURES);
+    const { layer } = await testLayer(
+      ArtifactSource.Service.of({
+        ...fixtures,
+        repoInfo: () =>
+          Effect.fail(new ArtifactSource.SourceError({ operation: "repoInfo", detail: "offline" })),
+      }),
+    );
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const ingest = yield* Ingest.Service;
+        const results = yield* ResultStore.Service;
+        const summary = yield* ingest.ingestAll();
+        expect(summary.errors).toEqual([expect.stringContaining("repoInfo acme/widgets")]);
+        expect(summary.inserted).toBe(7);
+        expect(Option.isNone(yield* results.scanOf("acme", "widgets"))).toBe(true);
+      }).pipe(Effect.provide(layer)),
+    );
+  });
+
   test("closing the service scope interrupts a background pass", async () => {
     const entered = Deferred.makeUnsafe<void>();
     const stopped = Deferred.makeUnsafe<void>();
@@ -223,6 +244,15 @@ describe("ingest pipeline (fixtures -> fs store -> sqlite)", () => {
       const second = yield* ingest.ingestAll();
       expect(second.inserted).toBe(0);
       expect(second.cached).toBe(0);
+
+      // The repository's own words about its default branch and environments are stored.
+      expect(Option.getOrNull(yield* results.scanOf("acme", "widgets"))).toMatchObject({
+        owner: "acme",
+        repo: "widgets",
+        defaultBranch: "develop",
+        environments: ["production", "staging"],
+        classification: null,
+      });
 
       const runs = yield* results.listRuns({ owner: "acme", repo: "widgets" });
       expect(runs).toHaveLength(7);

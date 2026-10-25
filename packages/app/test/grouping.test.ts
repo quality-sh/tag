@@ -142,6 +142,22 @@ describe("computeGroups", () => {
     expect(feat.baselineLabel).toBe("main");
     expect(feat.vsBaseline).toBeCloseTo(-20, 5);
   });
+  test("a repository's own default branch beats the guess", () => {
+    const stored = { "acme/widgets": "trunk" };
+    const rows = computeGroups({
+      reports,
+      refs,
+      by: "branch",
+      filters: [],
+      defaultBranches: stored,
+    });
+    const feat = rows.find((r) => r.key === "feat/x")!;
+    expect(feat.baselineLabel).toBe("trunk");
+    expect(feat.baselineRun).toBeNull();
+    const [w] = computeOverview({ reports, refs, defaultBranches: stored });
+    expect(w!.defaultBranch).toBe("trunk");
+    expect(w!.main.run).toBeNull();
+  });
   test("filters apply before grouping", () => {
     const rows = computeGroups({ reports, refs, by: "tool", filters: parseQuery("failed:>0") });
     expect(rows.map((r) => r.key).sort()).toEqual(["playwright", "pytest"]);
