@@ -1,6 +1,7 @@
 // The dashboard API as an Effect service over the Effect HttpClient.
 // 401 becomes a typed Unauthorized so the app can fall back to the login page.
 import { Context, Effect, Layer, Schema } from "effect";
+import type { IngestStatus } from "../server/ingest.ts";
 import { FetchHttpClient, HttpBody, HttpClient, type HttpClientResponse } from "effect/http";
 import type {
   Collection,
@@ -134,17 +135,19 @@ export interface RepoRow {
   repo: string;
   reports: number;
 }
+/** Where ingest stands with a repository: first sight, walking its history, or caught up. */
+export interface RepositoryState {
+  owner: string;
+  repo: string;
+  state: "new" | "backfilling" | "current";
+  backfillDone: number;
+  backfillTotal: number | null;
+}
 export interface RunFilter {
   readonly owner?: string | undefined;
   readonly repo?: string | undefined;
   readonly branch?: string | undefined;
   readonly tool?: string | undefined;
-}
-export interface IngestSummary {
-  runs: number;
-  artifacts: number;
-  inserted: number;
-  errors: string[];
 }
 
 export interface CollectionRow extends Collection {
@@ -219,7 +222,12 @@ export interface Interface {
     artifactId: string,
     path: string,
   ) => Effect.Effect<{ url: string; cached: boolean }, ApiError | Unauthorized>;
-  readonly ingest: () => Effect.Effect<IngestSummary, ApiError | Unauthorized>;
+  readonly ingest: () => Effect.Effect<{ readonly passId: string }, ApiError | Unauthorized>;
+  readonly ingestStatus: () => Effect.Effect<IngestStatus, ApiError | Unauthorized>;
+  readonly repositories: () => Effect.Effect<
+    ReadonlyArray<RepositoryState>,
+    ApiError | Unauthorized
+  >;
   readonly overview: (q: OverviewQuery) => Effect.Effect<OverviewPage, ApiError | Unauthorized>;
   readonly groups: (q: GroupsQuery) => Effect.Effect<GroupsPage, ApiError | Unauthorized>;
   readonly group: (
@@ -310,7 +318,9 @@ const make = Effect.gen(function* () {
       get<{ url: string; cached: boolean }>(
         `/api/artifacts/${encodeURIComponent(artifactId)}/link?path=${encodeURIComponent(path)}`,
       ),
-    ingest: () => post<IngestSummary>("/api/ingest", {}),
+    ingest: () => post<{ readonly passId: string }>("/api/ingest", {}),
+    ingestStatus: () => get<IngestStatus>("/api/ingest/status"),
+    repositories: () => get<ReadonlyArray<RepositoryState>>("/api/repositories"),
     overview: (o) => get<OverviewPage>(`/api/overview${query({ range: o.range, q: o.q, c: o.c })}`),
     groups: (g) =>
       get<GroupsPage>(`/api/groups${query({ by: g.by, q: g.q, range: g.range, c: g.c })}`),

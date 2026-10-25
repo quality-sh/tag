@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { Context, Deferred, Effect, Fiber, Layer, Option } from "effect";
+import { HttpRouter } from "effect/http";
+import { ApiRoutes } from "../src/server/http.ts";
+import { Auth } from "../src/server/auth.ts";
+import { Retention } from "../src/server/retention.ts";
 import { Ingest } from "../src/server/ingest.ts";
 import { ResultStore } from "../src/server/result-store.ts";
 import { ArtifactStore } from "../src/server/artifact-store.ts";
@@ -7,6 +11,198 @@ import { ArtifactSource } from "../src/server/artifact-source.ts";
 import { FIXTURES, testLayer } from "./helpers.ts";
 
 describe("ingest pipeline (fixtures -> fs store -> sqlite)", () => {
+  test("HTTP ingest returns 202, shares the active pass, and publishes each repository", async () => {
+    const fixtures = ArtifactSource.makeFixtures(FIXTURES);
+    const discovering = Deferred.makeUnsafe<void>();
+    const discovered = Deferred.makeUnsafe<void>();
+    const laterEntered = Deferred.makeUnsafe<void>();
+    const laterRelease = Deferred.makeUnsafe<void>();
+    const nextEntered = Deferred.makeUnsafe<void>();
+    const nextRelease = Deferred.makeUnsafe<void>();
+    const selected: Array<{ repo: string; limit: number | undefined }> = [];
+    let discoveries = 0;
+    const source = ArtifactSource.Service.of({
+      ...fixtures,
+      repos: Effect.fn(function* () {
+        discoveries++;
+        yield* Deferred.succeed(discovering, undefined);
+        yield* Deferred.await(discovered);
+        return [
+          { owner: "acme", repo: "widgets" },
+          { owner: "acme", repo: "broken" },
+          { owner: "acme", repo: "later" },
+          { owner: "acme", repo: "last" },
+        ];
+      }),
+      listRuns: Effect.fn(function* (repo, opts) {
+        selected.push({ repo: repo.repo, limit: opts?.limit });
+        if (opts?.limit === 1) {
+          yield* Deferred.succeed(nextEntered, undefined);
+          yield* Deferred.await(nextRelease);
+        }
+        if (repo.repo === "broken")
+          return yield* new ArtifactSource.SourceError({
+            operation: "listRuns",
+            detail: "offline",
+          });
+        if (repo.repo === "later") {
+          yield* Deferred.succeed(laterEntered, undefined);
+          yield* Deferred.await(laterRelease);
+        }
+        return yield* fixtures.listRuns(repo, opts);
+      }),
+    });
+    const { layer } = await testLayer(source);
+    const app = HttpRouter.toWebHandler(
+      ApiRoutes.pipe(
+        Layer.provide(Layer.mergeAll(Auth.layer, Retention.layer).pipe(Layer.provideMerge(layer))),
+      ),
+      { disableLogger: true },
+    );
+    const request = (path: string, method = "GET", body?: string) =>
+      app.handler(
+        new Request(`http://local/api/${path}`, {
+          method,
+          signal: AbortSignal.timeout(900),
+          ...(body ? { body, headers: { "content-type": "application/json" } } : {}),
+        }),
+      );
+    try {
+      expect(await (await request("ingest/status")).json()).toEqual({
+        running: null,
+        lastFinished: null,
+      });
+      const response = await request("ingest", "POST");
+      expect(response.status).toBe(202);
+      const { passId } = (await response.json()) as { passId: string };
+      expect(passId).toBeString();
+      await Effect.runPromise(Deferred.await(discovering));
+      const duplicate = await request("ingest", "POST");
+      expect(duplicate.status).toBe(202);
+      expect(await duplicate.json()).toEqual({ passId });
+      expect(await (await request("ingest/status")).json()).toMatchObject({
+        running: { passId, repositories: [], currentRepository: null, errors: [] },
+        lastFinished: null,
+      });
+      await Effect.runPromise(Deferred.succeed(discovered, undefined));
+      await Effect.runPromise(Deferred.await(laterEntered));
+      const progress = await (await request("ingest/status")).json();
+      expect(progress).toMatchObject({
+        running: {
+          passId,
+          repositories: [
+            { repository: { owner: "acme", repo: "widgets" }, summary: { inserted: 7 } },
+            { repository: { owner: "acme", repo: "broken" }, summary: { inserted: 0 } },
+          ],
+          currentRepository: { owner: "acme", repo: "later" },
+        },
+        lastFinished: null,
+      });
+      expect(progress.running.errors).toHaveLength(1);
+      expect(await (await request("runs")).json()).toHaveLength(7);
+      await Effect.runPromise(Deferred.succeed(laterRelease, undefined));
+      const finished = await Effect.runPromise(
+        Effect.promise(() => request("ingest/status").then((r) => r.json())).pipe(
+          Effect.repeat({ until: (status) => status.lastFinished !== null }),
+          Effect.timeout("1 second"),
+        ),
+      );
+      expect(finished).toMatchObject({
+        running: null,
+        lastFinished: { passId, currentRepository: null, summary: { inserted: 7 } },
+      });
+      expect(finished.lastFinished.repositories).toHaveLength(4);
+      expect(finished.lastFinished.summary.errors).toHaveLength(1);
+      expect(discoveries).toBe(1);
+      const nextResponse = await request(
+        "ingest",
+        "POST",
+        JSON.stringify({
+          owner: "acme",
+          repo: "widgets",
+          limit: 1,
+        }),
+      );
+      expect(nextResponse.status).toBe(202);
+      const next = (await nextResponse.json()) as { passId: string };
+      expect(next.passId).not.toBe(passId);
+      await Effect.runPromise(Deferred.await(nextEntered));
+      expect(await (await request("ingest/status")).json()).toMatchObject({
+        running: { passId: next.passId },
+        lastFinished: { passId },
+      });
+      await Effect.runPromise(Deferred.succeed(nextRelease, undefined));
+      const nextFinished = await Effect.runPromise(
+        Effect.promise(() => request("ingest/status").then((r) => r.json())).pipe(
+          Effect.repeat({ until: (status) => status.lastFinished.passId === next.passId }),
+          Effect.timeout("1 second"),
+        ),
+      );
+      expect(nextFinished.lastFinished.summary).toMatchObject({ inserted: 0, errors: [] });
+      expect(nextFinished.lastFinished.repositories).toHaveLength(1);
+      expect(selected.at(-1)).toEqual({ repo: "widgets", limit: 1 });
+      expect(discoveries).toBe(1);
+    } finally {
+      await app.dispose();
+    }
+  });
+
+  test("repository discovery failures finish the pass and allow a later pass", async () => {
+    let calls = 0;
+    const { layer } = await testLayer(
+      ArtifactSource.Service.of({
+        ...ArtifactSource.makeFixtures(FIXTURES),
+        repos: () =>
+          ++calls === 1
+            ? Effect.fail(new ArtifactSource.SourceError({ operation: "repos", detail: "offline" }))
+            : Effect.succeed([]),
+      }),
+    );
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const ingest = yield* Ingest.Service;
+        expect(yield* ingest.ingestAll()).toMatchObject({
+          inserted: 0,
+          errors: [expect.stringContaining("offline")],
+        });
+        const failed = yield* ingest.status();
+        expect(failed.running).toBeNull();
+        expect(failed.lastFinished?.summary.errors).toHaveLength(1);
+        expect(yield* ingest.ingestAll()).toMatchObject({ inserted: 0, errors: [] });
+        const recovered = yield* ingest.status();
+        expect(recovered.running).toBeNull();
+        expect(recovered.lastFinished?.passId).not.toBe(failed.lastFinished?.passId);
+        expect(recovered.lastFinished?.summary.errors).toEqual([]);
+      }).pipe(Effect.provide(layer)),
+    );
+  });
+
+  test("closing the service scope interrupts a background pass", async () => {
+    const entered = Deferred.makeUnsafe<void>();
+    const stopped = Deferred.makeUnsafe<void>();
+    const { layer } = await testLayer(
+      ArtifactSource.Service.of({
+        ...ArtifactSource.makeFixtures(FIXTURES),
+        repos: () =>
+          Deferred.succeed(entered, undefined).pipe(
+            Effect.andThen(Effect.never),
+            Effect.ensuring(Deferred.succeed(stopped, undefined)),
+          ),
+      }),
+    );
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const ingest = yield* Ingest.Service;
+        const passes = yield* Effect.all([ingest.start(), ingest.start()], {
+          concurrency: "unbounded",
+        });
+        expect(passes[0]).toEqual(passes[1]);
+        yield* Deferred.await(entered);
+      }).pipe(Effect.provide(layer)),
+    );
+    expect(Effect.runSync(Deferred.isDone(stopped))).toBe(true);
+  });
+
   test("ingests every fixture artifact, idempotently, and serves queries", async () => {
     const { layer } = await testLayer();
     const program = Effect.gen(function* () {
@@ -104,6 +300,56 @@ describe("ingest pipeline (fixtures -> fs store -> sqlite)", () => {
         expect(requestedRuns).toEqual([["run-1001", "run-1002", "run-1003"], []]);
         expect(runCalls).toBe(0);
         expect([...(yield* results.seenRuns("acme", "widgets"))].sort()).toEqual(requestedRuns[0]!);
+      }).pipe(Effect.provide(layer)),
+    );
+  });
+
+  test("backfills a new repository to the retention window, then follows the newest runs", async () => {
+    const fixtures = ArtifactSource.makeFixtures(FIXTURES);
+    const listings: Array<{ limit: number; since: string | undefined }> = [];
+    let failListing = true;
+    const source = ArtifactSource.Service.of({
+      ...fixtures,
+      listRuns: Effect.fn(function* (repo, opts) {
+        listings.push({ limit: opts.limit, since: opts.since });
+        return yield* fixtures.listRuns(repo, opts);
+      }),
+      listRepoArtifacts: Effect.fn(function* (repo, runIds) {
+        if (failListing)
+          return yield* new ArtifactSource.SourceError({
+            operation: "listRepoArtifacts",
+            detail: "offline",
+          });
+        return yield* fixtures.listRepoArtifacts(repo, runIds);
+      }),
+    });
+    const { layer } = await testLayer(source, { artifactRetentionDays: 30 });
+    const widgets = { owner: "acme", repo: "widgets" };
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const ingest = yield* Ingest.Service;
+        const results = yield* ResultStore.Service;
+        // A failed listing leaves the walk open, so a restart or the next pass takes it up again.
+        expect((yield* ingest.ingestRepo(widgets, { limit: 20 })).errors).toHaveLength(1);
+        expect(yield* results.repository("acme", "widgets")).toMatchObject(
+          Option.some({ state: "backfilling", backfillDone: 3, backfillTotal: 3 }),
+        );
+        failListing = false;
+        expect(yield* ingest.ingestRepo(widgets, { limit: 20 })).toMatchObject({
+          runs: 3,
+          inserted: 7,
+          errors: [],
+        });
+        expect(yield* results.repository("acme", "widgets")).toMatchObject(
+          Option.some({ state: "current", backfillDone: 3, backfillTotal: 3 }),
+        );
+        // Caught up: the fixed limit applies again and the window filter is gone.
+        yield* ingest.ingestRepo(widgets, { limit: 20 });
+        expect(listings.map((l) => l.limit)).toEqual([Infinity, Infinity, 20]);
+        const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+        expect(listings[0]?.since?.slice(0, 10)).toBe(cutoff);
+        expect(listings[2]?.since).toBeUndefined();
+        expect(yield* results.repositories()).toHaveLength(1);
       }).pipe(Effect.provide(layer)),
     );
   });

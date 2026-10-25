@@ -167,6 +167,44 @@ describe("GitHubSource", () => {
     );
   });
 
+  test("walks past GitHub's 1000-run page cap by narrowing the created window", async () => {
+    const day = (n: number) => `2026-10-${String(n).padStart(2, "0")}`;
+    const down = (from: number, to: number) =>
+      Array.from({ length: from - to + 1 }, (_, i) => from - i);
+    const batch = (ids: number[], dayOf: (i: number) => string) =>
+      ids.map((id, i) => run(id, { created_at: `${dayOf(i)}T09:59:00Z`, run_started_at: null }));
+    const gh = fakeGithub({
+      "/repos/acme/widgets/actions/runs": (url) => {
+        const created = url.searchParams.get("created");
+        const page = Number(url.searchParams.get("page"));
+        const slice = <T>(xs: T[]) => xs.slice((page - 1) * 100, page * 100);
+        // The open window stops at 1000 results, 100 a day, the oldest on the 11th.
+        if (created === ">=2026-09-25")
+          return {
+            workflow_runs: slice(batch(down(5000, 4001), (i) => day(20 - Math.floor(i / 100)))),
+          };
+        // Closed at the 11th: that day again, then 50 older runs.
+        if (created === "2026-09-25..2026-10-11")
+          return {
+            workflow_runs: slice(batch(down(4100, 3951), (i) => (i < 100 ? day(11) : day(9)))),
+          };
+        throw new Error(`unexpected created filter ${created}`);
+      },
+    });
+    await using(sourceWith(cfg(), gh.layer), (source) =>
+      Effect.gen(function* () {
+        const runs = yield* source.listRuns(
+          { owner: "acme", repo: "widgets" },
+          { limit: Infinity, since: "2026-09-25T00:00:00Z" },
+        );
+        expect(runs).toHaveLength(1050);
+        expect(new Set(runs.map((r) => r.runId)).size).toBe(1050);
+        expect(runs.at(-1)?.runId).toBe("3951");
+        expect(gh.hits).toHaveLength(12);
+      }),
+    );
+  });
+
   test("a pass waits on the fifth download, gates later runs and reports one wait", async () => {
     const limited = Deferred.makeUnsafe<void>();
     const downloads: number[] = [];
@@ -238,9 +276,12 @@ describe("GitHubSource", () => {
             remaining: 42,
             errors: [],
           });
+          // The first pass walks the retention window, a different page from the steady-state
+          // one, so revalidation starts with the second steady-state pass.
+          expect(yield* ingest.ingestAll()).toMatchObject({ runs: 0, errors: [] });
           expect(
             gh.hits.filter((hit) => hit.url.pathname.endsWith("/runs")).map((hit) => hit.etag),
-          ).toEqual([undefined, '"v1"']);
+          ).toEqual([undefined, undefined, '"v1"']);
         }).pipe(Effect.provide(layer));
       }).pipe(
         Effect.scoped,

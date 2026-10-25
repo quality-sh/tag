@@ -1,5 +1,5 @@
 // The pipeline: source -> zip -> store -> adapters -> result store. Idempotent at every step.
-import { Context, Effect, Layer, Semaphore } from "effect";
+import { Context, Deferred, Effect, Exit, Layer, Option, Ref as StateRef, Semaphore } from "effect";
 import { runAdapters, type FileRef, type RunContext } from "@quality-sh/tag-adapters";
 import { withTags } from "@quality-sh/tag-schema";
 import type { Ref } from "../grouping.ts";
@@ -26,7 +26,57 @@ export interface IngestSummary {
   readonly errors: ReadonlyArray<string>;
 }
 
+export interface IngestPass {
+  readonly passId: string;
+  readonly startedAt: string;
+  readonly repositories: ReadonlyArray<{
+    readonly repository: RepoRef;
+    readonly summary: IngestSummary;
+  }>;
+  readonly currentRepository: RepoRef | null;
+  readonly errors: ReadonlyArray<string>;
+}
+
+export interface IngestStatus {
+  readonly running: IngestPass | null;
+  readonly lastFinished:
+    (IngestPass & { readonly finishedAt: string; readonly summary: IngestSummary }) | null;
+}
+
+type IngestOptions = { readonly limit?: number; readonly branch?: string };
+
+const emptySummary = (): IngestSummary => ({
+  waits: 0,
+  remaining: null,
+  runs: 0,
+  refs: 0,
+  artifacts: 0,
+  cached: 0,
+  reports: 0,
+  inserted: 0,
+  errors: [],
+});
+
+const addSummary = (total: IngestSummary, next: IngestSummary): IngestSummary => ({
+  waits: total.waits + next.waits,
+  remaining: next.remaining,
+  runs: total.runs + next.runs,
+  refs: total.refs + next.refs,
+  artifacts: total.artifacts + next.artifacts,
+  cached: total.cached + next.cached,
+  reports: total.reports + next.reports,
+  inserted: total.inserted + next.inserted,
+  errors: [...total.errors, ...next.errors],
+});
+
 export interface Interface {
+  /** Start a service-owned pass, or return the pass already running. */
+  readonly start: (
+    repo?: RepoRef,
+    opts?: IngestOptions,
+  ) => Effect.Effect<{ readonly passId: string }>;
+  readonly status: () => Effect.Effect<IngestStatus>;
+
   /** Discover recent runs for a repository and ingest every artifact. */
   readonly ingestRepo: (
     repo: RepoRef,
@@ -49,6 +99,7 @@ export const artifactPrefix = (a: { owner: string; repo: string; artifactId: str
   `artifacts/${a.owner}/${a.repo}/${a.artifactId}/`;
 
 const COMPLETE = ".complete";
+const DAY = 86_400_000;
 
 export const layer = Layer.effect(
   Service,
@@ -57,6 +108,17 @@ export const layer = Layer.effect(
     const source = yield* ArtifactSource.Service;
     const store = yield* ArtifactStore.Service;
     const results = yield* ResultStore.Service;
+    const scope = yield* Effect.scope;
+    const status = yield* StateRef.make<IngestStatus>({ running: null, lastFinished: null });
+    const updateProgress = (f: (pass: IngestPass) => IngestPass) =>
+      StateRef.update(status, (state) => ({
+        ...state,
+        running: state.running ? f(state.running) : null,
+      }));
+    const recordError = (errors: string[], message: string) => {
+      errors.push(message);
+      return updateProgress((pass) => ({ ...pass, errors: [...pass.errors, message] }));
+    };
 
     const cacheArtifact = Effect.fn("Ingest.cacheArtifact")(function* (artifact: ArtifactMeta) {
       const prefix = artifactPrefix(artifact);
@@ -186,35 +248,65 @@ export const layer = Layer.effect(
         cached: 0,
         errors: [] as string[],
       };
+      // First sight, or a walk cut short earlier: take every run inside the retention window,
+      // newest first, and record progress so the pages can show it and a restart resumes it.
+      const known = yield* results
+        .repository(repo.owner, repo.repo)
+        .pipe(Effect.catchCause(() => Effect.succeed(Option.none<ResultStore.RepositoryRow>())));
+      const backfill = !opts?.branch && (Option.isNone(known) || known.value.state !== "current");
+      const setState = (
+        state: ResultStore.RepositoryRow["state"],
+        backfillDone: number,
+        backfillTotal: number | null,
+      ) =>
+        results
+          .upsertRepository({ ...repo, state, backfillDone, backfillTotal })
+          .pipe(Effect.ignore);
+      if (Option.isNone(known)) yield* setState("new", 0, null);
+      const since =
+        backfill && cfg.artifactRetentionDays > 0
+          ? new Date(Date.now() - cfg.artifactRetentionDays * DAY).toISOString()
+          : undefined;
       const refs = yield* source.listRefs(repo).pipe(
         Effect.catchCause((c) => {
-          acc.errors.push(`listRefs ${repo.owner}/${repo.repo}: ${String(c)}`);
-          return Effect.succeed([] as ReadonlyArray<Ref>);
+          return recordError(acc.errors, `listRefs ${repo.owner}/${repo.repo}: ${String(c)}`).pipe(
+            Effect.as([] as ReadonlyArray<Ref>),
+          );
         }),
       );
       for (const ref of refs) {
         yield* results.upsertRef(ref).pipe(Effect.ignore);
         acc.refs++;
       }
+      let runsListed = true;
       const runs = yield* source
-        .listRuns(repo, {
-          limit: opts?.limit ?? 20,
-          ...(opts?.branch ? { branch: opts.branch } : {}),
-        })
+        .listRuns(
+          repo,
+          backfill
+            ? { limit: Infinity, ...(since ? { since } : {}) }
+            : { limit: opts?.limit ?? 20, ...(opts?.branch ? { branch: opts.branch } : {}) },
+        )
         .pipe(
           Effect.catchCause((c) => {
-            acc.errors.push(`listRuns ${repo.owner}/${repo.repo}: ${String(c)}`);
-            return Effect.succeed([] as ReadonlyArray<RunMeta>);
+            runsListed = false;
+            return recordError(
+              acc.errors,
+              `listRuns ${repo.owner}/${repo.repo}: ${String(c)}`,
+            ).pipe(Effect.as([] as ReadonlyArray<RunMeta>));
           }),
         );
+      const progress = { done: 0 };
+      if (backfill && runsListed) yield* setState("backfilling", 0, runs.length);
       const seen = yield* results
         .seenRuns(repo.owner, repo.repo)
         .pipe(Effect.catchCause(() => Effect.succeed(new Set<string>() as ReadonlySet<string>)));
       const unseen = new Set(runs.filter((run) => !seen.has(run.runId)).map((run) => run.runId));
       const artifacts = yield* source.listRepoArtifacts(repo, unseen).pipe(
         Effect.catch((error) => {
-          acc.errors.push(`listRepoArtifacts ${repo.owner}/${repo.repo}: ${String(error)}`);
-          return Effect.succeed(undefined);
+          return recordError(
+            acc.errors,
+            `listRepoArtifacts ${repo.owner}/${repo.repo}: ${String(error)}`,
+          ).pipe(Effect.as(undefined));
         }),
       );
       const byRun = new Map<string, ArtifactMeta[]>();
@@ -266,8 +358,7 @@ export const layer = Layer.effect(
           if (artifact.expired) continue;
           yield* ingestArtifact(run, artifact, acc).pipe(
             Effect.catchCause((c) => {
-              acc.errors.push(`${run.runId}/${artifact.name}: ${String(c)}`);
-              return Effect.void;
+              return recordError(acc.errors, `${run.runId}/${artifact.name}: ${String(c)}`);
             }),
           );
         }
@@ -278,12 +369,18 @@ export const layer = Layer.effect(
         (run) =>
           ingestRun(run).pipe(
             Effect.catch((error) => {
-              acc.errors.push(`index ${run.runId}: ${String(error)}`);
-              return Effect.void;
+              return recordError(acc.errors, `index ${run.runId}: ${String(error)}`);
             }),
+            Effect.andThen(() =>
+              backfill ? setState("backfilling", ++progress.done, runs.length) : Effect.void,
+            ),
           ),
         { concurrency: 4, discard: true },
       );
+      // Caught up once every run in the window has its artifacts indexed. A failed listing
+      // leaves the walk open, so the next pass takes it up again.
+      if (backfill && runsListed && artifacts !== undefined)
+        yield* setState("current", runs.length, runs.length);
       const after = yield* source.requestStats();
       acc.waits = after.waits - before.waits;
       acc.remaining = after.remaining;
@@ -293,47 +390,108 @@ export const layer = Layer.effect(
       return acc;
     });
 
-    const ingestAll = Effect.fn("Ingest.ingestAll")(function* (opts?: { readonly limit?: number }) {
+    const runPass = Effect.fn("Ingest.runPass")(function* (repo?: RepoRef, opts?: IngestOptions) {
       const before = yield* source.requestStats();
-      const repos = yield* source
-        .repos()
-        .pipe(Effect.catchCause(() => Effect.succeed([] as ReadonlyArray<RepoRef>)));
-      const total = {
-        waits: 0,
-        remaining: null as number | null,
-        runs: 0,
-        refs: 0,
-        artifacts: 0,
-        reports: 0,
-        inserted: 0,
-        cached: 0,
-        errors: [] as string[],
-      };
-      for (const repo of repos) {
-        const s = yield* ingestRepo(repo, opts);
-        total.runs += s.runs;
-        total.refs += s.refs;
-        total.artifacts += s.artifacts;
-        total.reports += s.reports;
-        total.inserted += s.inserted;
-        total.cached += s.cached;
-        total.errors.push(...s.errors);
+      const repos = repo
+        ? [repo]
+        : yield* source
+            .repos()
+            .pipe(
+              Effect.catch((error) =>
+                recordError([], `repos: ${error.detail}`).pipe(
+                  Effect.as([] as ReadonlyArray<RepoRef>),
+                ),
+              ),
+            );
+      let total = emptySummary();
+      for (const repository of repos) {
+        yield* updateProgress((pass) => ({ ...pass, currentRepository: repository }));
+        const summary = yield* ingestRepo(repository, opts);
+        total = addSummary(total, summary);
+        yield* updateProgress((pass) => ({
+          ...pass,
+          currentRepository: null,
+          repositories: [...pass.repositories, { repository, summary }],
+        }));
       }
       const after = yield* source.requestStats();
-      total.waits = after.waits - before.waits;
-      total.remaining = after.remaining;
-      yield* Effect.logInfo(
-        `ingest pass: ${total.waits} waits, ${total.remaining ?? "unknown"} requests remaining`,
-      );
-      return total;
+      return { ...total, waits: after.waits - before.waits, remaining: after.remaining };
     });
 
-    // One pass at a time: a second "check for new runs" waits for the first instead of doubling the calls.
-    const onePass = yield* Semaphore.make(1);
-    void cfg;
+    // Admission is short: requests share the active job while its fiber owns the work.
+    const admission = yield* Semaphore.make(1);
+    let active: {
+      readonly passId: string;
+      readonly done: Deferred.Deferred<IngestSummary>;
+    } | null = null;
+    const launch = Effect.fn("Ingest.launch")(
+      function* (repo: RepoRef | undefined, opts: IngestOptions | undefined) {
+        if (active) return { job: active, started: false };
+        const job = { passId: crypto.randomUUID(), done: yield* Deferred.make<IngestSummary>() };
+        const pass: IngestPass = {
+          passId: job.passId,
+          startedAt: new Date().toISOString(),
+          repositories: [],
+          currentRepository: null,
+          errors: [],
+        };
+        yield* StateRef.update(status, (state) => ({ ...state, running: pass }));
+        active = job;
+        yield* runPass(repo, opts).pipe(
+          Effect.onExit((exit) =>
+            admission.withPermits(1)(
+              Effect.gen(function* () {
+                const state = yield* StateRef.get(status);
+                const progress = state.running ?? pass;
+                const summary = Exit.isSuccess(exit)
+                  ? exit.value
+                  : progress.repositories.reduce(
+                      (total, entry) => addSummary(total, entry.summary),
+                      emptySummary(),
+                    );
+                const errors = Exit.isFailure(exit)
+                  ? [...progress.errors, String(exit.cause)]
+                  : progress.errors;
+                const finished = { ...summary, errors };
+                yield* StateRef.set(status, {
+                  running: null,
+                  lastFinished: {
+                    ...progress,
+                    currentRepository: null,
+                    errors,
+                    finishedAt: new Date().toISOString(),
+                    summary: finished,
+                  },
+                });
+                active = null;
+                yield* Deferred.succeed(job.done, finished);
+              }),
+            ),
+          ),
+          Effect.forkIn(scope),
+        );
+        return { job, started: true };
+      },
+      (effect) => effect.pipe(admission.withPermits(1), Effect.uninterruptible),
+    );
+
+    // Synchronous callers still request their own pass after any current one ends.
+    const ingest = Effect.fn("Ingest.ingest")(function* (repo?: RepoRef, opts?: IngestOptions) {
+      let launched = yield* launch(repo, opts);
+      while (!launched.started) {
+        yield* Deferred.await(launched.job.done);
+        launched = yield* launch(repo, opts);
+      }
+      return yield* Deferred.await(launched.job.done);
+    });
     return Service.of({
-      ingestRepo: (repo, opts) => onePass.withPermits(1)(ingestRepo(repo, opts)),
-      ingestAll: (opts) => onePass.withPermits(1)(ingestAll(opts)),
+      start: Effect.fn("Ingest.start")(function* (repo, opts) {
+        const { job } = yield* launch(repo, opts);
+        return { passId: job.passId };
+      }),
+      status: () => StateRef.get(status),
+      ingestRepo: (repo, opts) => ingest(repo, opts),
+      ingestAll: (opts) => ingest(undefined, opts),
       cacheArtifact,
     });
   }),

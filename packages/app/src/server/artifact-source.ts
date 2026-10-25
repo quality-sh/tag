@@ -51,9 +51,10 @@ export interface Interface {
     readonly remaining: number | null;
   }>;
   readonly repos: () => Effect.Effect<ReadonlyArray<RepoRef>, SourceError>;
+  /** Completed runs, newest first. `since` keeps only runs created at or after that ISO time. */
   readonly listRuns: (
     repo: RepoRef,
-    opts: { readonly limit: number; readonly branch?: string },
+    opts: { readonly limit: number; readonly branch?: string; readonly since?: string },
   ) => Effect.Effect<ReadonlyArray<RunMeta>, SourceError>;
   readonly listArtifacts: (run: RunMeta) => Effect.Effect<ReadonlyArray<ArtifactMeta>, SourceError>;
   /** Repository listing for runs needing an index. An empty set checks only the newest page. */
@@ -155,7 +156,10 @@ export const makeFixtures = (dir: string): Interface => {
       catch: srcError("repos", dir),
     });
 
-  const listRuns = (repo: RepoRef, opts: { readonly limit: number; readonly branch?: string }) =>
+  const listRuns = (
+    repo: RepoRef,
+    opts: { readonly limit: number; readonly branch?: string; readonly since?: string },
+  ) =>
     Effect.tryPromise({
       try: async () => {
         const base = join(dir, repo.owner, repo.repo);
@@ -175,7 +179,9 @@ export const makeFixtures = (dir: string): Interface => {
             ...(meta.tags ? { tags: meta.tags } : {}),
             status: "completed",
           };
-          if (!opts.branch || run.branch === opts.branch) runs.push(run);
+          if (opts.branch && run.branch !== opts.branch) continue;
+          if (opts.since && run.timestamp && run.timestamp < opts.since) continue;
+          runs.push(run);
         }
         runs.sort((a, b) => (b.timestamp ?? b.runId).localeCompare(a.timestamp ?? a.runId));
         return runs.slice(0, opts.limit);

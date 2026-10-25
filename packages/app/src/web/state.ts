@@ -1,11 +1,17 @@
 // Application state as Effect atoms. Reads are atoms over the API runtime and
 // refresh when a write invalidates their reactivity key; the route and the
 // search bar's typed text are plain writable atoms.
-import { Effect, Option } from "effect";
+import { Effect, Option, Schedule } from "effect";
 import * as Atom from "effect/reactivity/Atom";
 import * as Reactivity from "effect/reactivity/Reactivity";
 import { isGroupBy, isRange, type GroupBy, type Range } from "../grouping.ts";
-import { TagApi, layer as apiLayer, type GroupsQuery, type OverviewQuery } from "./client.ts";
+import {
+  ApiError,
+  TagApi,
+  layer as apiLayer,
+  type GroupsQuery,
+  type OverviewQuery,
+} from "./client.ts";
 
 // Routes
 
@@ -180,9 +186,49 @@ export const logoutFn = runtime.fn(() =>
   withApi((api) => api.logout()).pipe(Effect.andThen(Reactivity.invalidate(keys.session))),
 );
 
-export const ingestFn = runtime.fn(() => withApi((api) => api.ingest()), {
-  reactivityKeys: keys.runs,
+export const checkForNewRuns = Effect.fn("web.checkForNewRuns")(function* () {
+  const api = yield* TagApi;
+  const { passId } = yield* api.ingest();
+  let completed = 0;
+  const poll = Effect.gen(function* () {
+    const status = yield* api.ingestStatus();
+    if (status.lastFinished?.passId === passId) {
+      yield* Reactivity.invalidate(keys.runs);
+      return Option.some(status.lastFinished.summary);
+    }
+    if (status.running?.passId !== passId) {
+      yield* Reactivity.invalidate(keys.runs);
+      return yield* new ApiError({
+        status: 0,
+        detail: "The ingest pass is no longer available. Check for new runs again.",
+      });
+    }
+    if (status.running.repositories.length > completed) {
+      completed = status.running.repositories.length;
+      yield* Reactivity.invalidate(keys.runs);
+    }
+    return Option.none();
+  });
+  const summary = yield* poll.pipe(
+    Effect.repeat({
+      schedule: Schedule.spaced("2 seconds"),
+      until: Option.isSome,
+    }),
+  );
+  if (Option.isNone(summary))
+    return yield* new ApiError({ status: 0, detail: "The ingest pass has no summary." });
+  return summary.value;
 });
+
+export const ingestFn = runtime.fn(() => checkForNewRuns()).pipe(Atom.keepAlive);
+
+/** Every repository's ingest state; pages poll it while one is still backfilling. */
+export const repositoriesAtom = runtime
+  .atom(withApi((api) => api.repositories()))
+  .pipe(Atom.withReactivity(keys.runs), Atom.keepAlive);
+
+/** Re-read every run-derived atom, as a backfill lands reports without a check. */
+export const refreshRunsFn = runtime.fn(() => Reactivity.invalidate(keys.runs));
 
 export const createCollectionFn = runtime.fn(
   (input: { name: string; description: string; query: string }) =>
