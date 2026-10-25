@@ -860,6 +860,7 @@ describe("GitHubSource", () => {
         text: "jobs:\n  Tests:\n    steps:\n      - run: bun test\n",
       },
     ]);
+  });
 
   test("an App source fails typed before an installation is recorded, and a live record flips it", async () => {
     const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
