@@ -321,6 +321,9 @@ const table = stylex.create({
     borderBottomStyle: "solid",
     borderBottomColor: tokens.hair,
     verticalAlign: "top",
+    // Long unbroken names (`crate::module::test`) may break anywhere, so a table never
+    // grows past its column; `nowrap` cells are unaffected.
+    overflowWrap: "anywhere",
   },
   right: {
     textAlign: "right",
