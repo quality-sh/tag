@@ -60,7 +60,7 @@ import {
   type Suggestion,
 } from "../grouping.ts";
 import type { CollectionRow, GroupDetail, GroupsPage, RepoRow } from "./client.ts";
-import { Loaded, SignOut, cap } from "./common.tsx";
+import { InstallLink, Loaded, SignOut, cap } from "./common.tsx";
 import {
   collectionsAtom,
   createCollectionFn,
@@ -125,6 +125,7 @@ function daily(groups: ReadonlyArray<GroupRow>, days = 14) {
 const Good = ({ n }: { n: number | undefined }) =>
   n === undefined ? <Dim>—</Dim> : n > 0 ? <K tone="good">{n}</K> : <Dim>0</Dim>;
 const Dim = ({ children }: { children: ReactNode }) => <K tone="dim">{children}</K>;
+
 const Verdict = ({ failed, none }: { failed: boolean; none?: boolean }) =>
   none ? (
     <Mark tone="quiet">no runs</Mark>
@@ -279,6 +280,7 @@ export function ViewPage({ view }: { view: View }) {
         actions={
           <>
             <TopbarAction href={href.collections()}>collections</TopbarAction>
+            <InstallLink />
             <SignOut />
           </>
         }

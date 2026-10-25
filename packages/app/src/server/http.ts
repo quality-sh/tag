@@ -22,6 +22,7 @@ import {
 } from "../grouping.ts";
 import { AppConfig } from "./config.ts";
 import { Auth, SESSION_COOKIE } from "./auth.ts";
+import { Installation } from "./installation.ts";
 import { ResultStore } from "./result-store.ts";
 import { ArtifactStore } from "./artifact-store.ts";
 import { Ingest } from "./ingest.ts";
@@ -119,6 +120,15 @@ export const ApiRoutes = HttpRouter.use((router) =>
     const retention = yield* Retention.Service;
     const auth = yield* Auth.Service;
     const cfg = yield* AppConfig.Service;
+    const installation = yield* Installation.Service;
+    /** The App install link; App credentials plus the slug from GITHUB_APP_SLUG. */
+    const installUrl = Option.flatMap(cfg.github, (g) =>
+      g.auth._tag === "app"
+        ? Option.map(g.slug, (slug) => `https://github.com/apps/${slug}/installations/new`)
+        : Option.none<string>(),
+    );
+    // Background passes fork here: the scope lives as long as the server, not the request.
+    const background = yield* Effect.scope;
 
     yield* router.add(
       "GET",
@@ -126,13 +136,17 @@ export const ApiRoutes = HttpRouter.use((router) =>
       json({ ok: true, source: cfg.source, store: Option.isSome(cfg.s3) ? "s3" : "fs" }),
     );
 
+    // The dashboard shows "install on GitHub" only while no installation is recorded, and the
+    // link goes through /api/install so the signed state travels with it.
     yield* router.add("GET", "/api/session", (req) =>
-      Effect.succeed(
-        json({
+      Effect.gen(function* () {
+        const installed = Option.isSome(yield* installation.current());
+        return json({
           authenticated: auth.verifySession(req.cookies[SESSION_COOKIE]),
           authRequired: auth.enabled,
-        }),
-      ),
+          ...(Option.isSome(installUrl) && !installed ? { installUrl: "/api/install" } : {}),
+        });
+      }),
     );
 
     yield* router.add("POST", "/api/login", () =>
@@ -158,6 +172,40 @@ export const ApiRoutes = HttpRouter.use((router) =>
         "",
         cookieOptions(0),
       )(json({ ok: true })).pipe(Effect.orDie),
+    );
+
+    /** Send the admin to GitHub to pick repositories, with a signed state to come back to. */
+    yield* router.add("GET", "/api/install", () =>
+      Effect.suspend(() =>
+        Option.isNone(installUrl)
+          ? Effect.succeed(json({ error: "token mode needs no install" }, 400))
+          : Effect.succeed(
+              HttpServerResponse.redirect(
+                `${installUrl.value}?state=${encodeURIComponent(auth.issueInstallState())}`,
+              ),
+            ),
+      ),
+    );
+
+    /** GitHub sends the admin back here; record the installation and start a pass. */
+    yield* router.add("GET", "/api/install/callback", (req) =>
+      Effect.gen(function* () {
+        const q = query(req);
+        if (!auth.verifyInstallState(q.get("state") ?? undefined))
+          return json({ error: "stale or forged install state" }, 400);
+        const id = q.get("installation_id") ?? "";
+        if (!/^\d+$/.test(id)) return json({ error: "installation_id missing" }, 400);
+        yield* installation.record(id);
+        yield* ingest.ingestAll({ limit: 20 }).pipe(
+          Effect.tap((s) =>
+            Effect.logInfo(
+              `install backfill: ${s.inserted} new reports, ${s.errors.length} errors`,
+            ),
+          ),
+          Effect.forkIn(background),
+        );
+        return HttpServerResponse.redirect("/");
+      }),
     );
 
     yield* router.add(

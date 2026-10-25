@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { Cause } from "effect";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
-import { useAtomRefresh, useAtomSet } from "@effect/atom-react/Hooks";
+import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react/Hooks";
 import { Empty, TopbarAction, type Segment } from "@quality-sh/tag-ui";
 import { Unauthorized } from "./client.ts";
 import { logoutFn, sessionAtom } from "./state.ts";
@@ -58,6 +58,13 @@ export const segmentsOf = (r: {
 export function SignOut() {
   const logout = useAtomSet(logoutFn);
   return <TopbarAction onClick={() => logout()}>sign out</TopbarAction>;
+}
+
+/** The App install link, while the server serves one; GitHub sends the admin back here. */
+export function InstallLink() {
+  const session = useAtomValue(sessionAtom);
+  const installUrl = AsyncResult.isSuccess(session) ? session.value.installUrl : undefined;
+  return installUrl ? <TopbarAction href={installUrl}>install on GitHub</TopbarAction> : null;
 }
 
 export const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

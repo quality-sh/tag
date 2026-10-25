@@ -185,6 +185,9 @@ export interface Interface {
   readonly collections: () => Effect.Effect<ReadonlyArray<Collection>, DbError>;
   readonly saveCollection: (c: Collection) => Effect.Effect<void, DbError>;
   readonly deleteCollection: (id: string) => Effect.Effect<boolean, DbError>;
+  /** One key/value row; the GitHub App installation id lives here between boots. */
+  readonly getSetting: (key: string) => Effect.Effect<Option.Option<string>, DbError>;
+  readonly setSetting: (key: string, value: string) => Effect.Effect<void, DbError>;
   /** Drop the index and rebuild it from reports/ in the artifact store. */
   readonly rebuild: () => Effect.Effect<
     { readonly reports: number },
@@ -239,6 +242,9 @@ CREATE TABLE IF NOT EXISTS refs (
 CREATE TABLE IF NOT EXISTS collections (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL, query TEXT NOT NULL,
   group_by TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY, value TEXT NOT NULL
 );
 `;
 
@@ -684,6 +690,26 @@ export const make = (db: Database, store: ArtifactStore.Interface): Interface =>
       () => db.query<unknown, [string]>(`DELETE FROM collections WHERE id = ?`).run(id).changes > 0,
     );
 
+  const getSetting = (key: string) =>
+    trySync("getSetting", () =>
+      Option.map(
+        Option.fromNullOr(
+          db
+            .query<{ value: string }, [string]>(`SELECT value FROM settings WHERE key = ?`)
+            .get(key),
+        ),
+        (row) => row.value,
+      ),
+    );
+
+  const setSetting = (key: string, value: string) =>
+    trySync("setSetting", () => {
+      db.query<unknown, Params>(
+        `INSERT INTO settings (key, value) VALUES ($key, $value)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      ).run({ $key: key, $value: value });
+    });
+
   const rebuild = Effect.fn("ResultStore.rebuild")(function* () {
     yield* trySync("rebuild.clear", () => {
       db.run("DELETE FROM metrics");
@@ -736,6 +762,8 @@ export const make = (db: Database, store: ArtifactStore.Interface): Interface =>
     collections,
     saveCollection,
     deleteCollection,
+    getSetting,
+    setSetting,
     rebuild,
   };
 };

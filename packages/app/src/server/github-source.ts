@@ -2,7 +2,7 @@
 // group runs (releases, tags, pull requests, deployments). Talks to the REST API through
 // the Effect HttpClient with an App installation token or a plain token.
 import { createSign } from "node:crypto";
-import { Clock, Effect, Layer, Option, Redacted, Schedule, Schema, Semaphore } from "effect";
+import { Clock, Effect, Exit, Layer, Option, Redacted, Schedule, Schema, Semaphore } from "effect";
 import {
   FetchHttpClient,
   HttpClient,
@@ -11,6 +11,7 @@ import {
 } from "effect/http";
 import type { Ref } from "../grouping.ts";
 import { AppConfig, type GithubConfig } from "./config.ts";
+import { Installation } from "./installation.ts";
 import {
   Service,
   SourceError,
@@ -131,6 +132,7 @@ const appJwt = (appId: string, privateKey: Redacted.Redacted<string>) =>
   });
 
 export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig) {
+  const installation = yield* Installation.Service;
   const base = (yield* HttpClient.HttpClient).pipe(
     HttpClient.mapRequest((req) =>
       req.pipe(
@@ -229,14 +231,22 @@ export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig)
       );
 
   // The installation token is good for an hour; mint a fresh one a little before that.
+  // A failed mint (no installation recorded yet) expires at once, so a live record flips
+  // the source without a restart.
   const mintToken: Effect.Effect<string, SourceError> =
     cfg.auth._tag === "token"
       ? Effect.succeed(Redacted.value(cfg.auth.token))
       : Effect.gen(function* () {
           const auth = cfg.auth as Extract<GithubConfig["auth"], { _tag: "app" }>;
+          const id = yield* installation.current();
+          if (Option.isNone(id))
+            return yield* new SourceError({
+              operation: "token",
+              detail: "no installation recorded yet; install the App or set GITHUB_INSTALLATION_ID",
+            });
           const jwt = yield* appJwt(auth.appId, auth.privateKey);
           const response = yield* request(
-            api.post(`/app/installations/${auth.installationId}/access_tokens`, {
+            api.post(`/app/installations/${id.value}/access_tokens`, {
               headers: { authorization: `Bearer ${jwt}` },
             }),
           ).pipe(Effect.mapError(srcError("token", "installation token")));
@@ -249,7 +259,9 @@ export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig)
           yield* Effect.logInfo(`github: installation token minted, expires ${t.expires_at}`);
           return t.token;
         });
-  const token = yield* Effect.cachedWithTTL(mintToken, "50 minutes");
+  const token = yield* Effect.cachedWithTTL(mintToken, (exit) =>
+    Exit.isSuccess(exit) ? "50 minutes" : 0,
+  );
 
   /** GET a JSON document from the API with the current token. */
   const getJson = <S extends Schema.Top>(
@@ -585,14 +597,14 @@ export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig)
   return source;
 });
 
-/** The GitHub source from AppConfig; needs an HttpClient. */
+/** The GitHub source from AppConfig; needs an HttpClient and the Installation service. */
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const cfg = yield* AppConfig.Service;
     if (Option.isNone(cfg.github))
       return yield* Effect.die(
-        "SOURCE=github needs GITHUB_TOKEN, or GITHUB_APP_ID with GITHUB_APP_PRIVATE_KEY and GITHUB_INSTALLATION_ID",
+        "SOURCE=github needs GITHUB_TOKEN, or GITHUB_APP_ID with GITHUB_APP_PRIVATE_KEY",
       );
     const g = cfg.github.value;
     yield* Effect.logInfo(
