@@ -7,6 +7,7 @@ import { ArtifactStore } from "./server/artifact-store.ts";
 import { ArtifactSource } from "./server/artifact-source.ts";
 import { GitHubSource } from "./server/github-source.ts";
 import { ResultStore } from "./server/result-store.ts";
+import { Installation } from "./server/installation.ts";
 import { Ingest } from "./server/ingest.ts";
 import { Retention } from "./server/retention.ts";
 import { Auth } from "./server/auth.ts";
@@ -15,11 +16,20 @@ import { ArtifactApp } from "./server/artifact-server.ts";
 
 const WEB_ROOT = new URL("../dist/", import.meta.url).pathname;
 
+// One layer value per resource: every reference in the composition builds once, so the
+// source, the install flow and the stores all see the same instances.
+const store = ArtifactStore.layer;
+const results = ResultStore.layer.pipe(Layer.provide(store));
+const installation = Installation.layer.pipe(Layer.provide(results));
+
 const SourceLayer = Layer.unwrap(
   Effect.gen(function* () {
     const cfg = yield* AppConfig.Service;
     if (cfg.source === "github")
-      return GitHubSource.layer.pipe(Layer.provide(FetchHttpClient.layer));
+      return GitHubSource.layer.pipe(
+        Layer.provide(FetchHttpClient.layer),
+        Layer.provide(installation),
+      );
     return ArtifactSource.layerFixtures(cfg.fixturesDir);
   }),
 );
@@ -27,8 +37,8 @@ const SourceLayer = Layer.unwrap(
 // Built bottom-up: ingest needs the result store, which needs the artifact store; the
 // stores, the source and auth all need the config. provideMerge keeps every service visible.
 const Services = Layer.mergeAll(Ingest.layer, Retention.layer).pipe(
-  Layer.provideMerge(ResultStore.layer),
-  Layer.provideMerge(Layer.mergeAll(ArtifactStore.layer, SourceLayer, Auth.layer)),
+  Layer.provideMerge(results),
+  Layer.provideMerge(Layer.mergeAll(store, SourceLayer, Auth.layer, installation)),
   Layer.provideMerge(AppConfig.layer),
 );
 

@@ -29,7 +29,7 @@ import {
 import { RANGES, type Range, type RecentRun, type RepoOverview } from "../grouping.ts";
 import { BackfillStatus, backfillOf, progressText, useBackfilling } from "./backfill.tsx";
 import type { RepoScan, RepositoryState } from "./client.ts";
-import { Loaded, SignOut } from "./common.tsx";
+import { InstallLink, Loaded, SignOut } from "./common.tsx";
 import { CollectionsTable, Rail } from "./home.tsx";
 import { href, ingestFn, overviewAtom, overviewKey } from "./state.ts";
 
@@ -70,6 +70,7 @@ export function OverviewPage({ range }: { range: Range }) {
         actions={
           <>
             <TopbarAction href={href.collections()}>collections</TopbarAction>
+            <InstallLink />
             <SignOut />
           </>
         }

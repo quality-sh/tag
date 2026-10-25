@@ -129,6 +129,8 @@ export type HistoryRow = TestRow & { metrics: MetricRow[] };
 export interface Session {
   authenticated: boolean;
   authRequired: boolean;
+  /** The App's "Install on GitHub" link, when App credentials and a slug are configured. */
+  installUrl?: string;
 }
 export interface RepoRow {
   owner: string;

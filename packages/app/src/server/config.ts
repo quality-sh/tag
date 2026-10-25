@@ -15,12 +15,15 @@ export type GithubAuth =
       readonly _tag: "app";
       readonly appId: string;
       readonly privateKey: Redacted.Redacted<string>;
-      readonly installationId: string;
+      /** The seed from the last boot; an installation recorded at runtime takes over. */
+      readonly installationId: Option.Option<string>;
     };
 
 export interface GithubConfig {
   readonly auth: GithubAuth;
   readonly apiUrl: string;
+  /** The App's URL slug, from GITHUB_APP_SLUG; it builds the "Install on GitHub" link. */
+  readonly slug: Option.Option<string>;
   /** Empty means every repository the installation can see. */
   readonly repos: ReadonlyArray<{ readonly owner: string; readonly repo: string }>;
 }
@@ -71,7 +74,7 @@ export const layer = Layer.effect(
           _tag: "app",
           appId: appId.value,
           privateKey: yield* Config.Redacted("GITHUB_APP_PRIVATE_KEY"),
-          installationId: yield* Config.String("GITHUB_INSTALLATION_ID"),
+          installationId: yield* Config.option(Config.String("GITHUB_INSTALLATION_ID")),
         })
       : Option.isSome(token)
         ? Option.some({ _tag: "token", token: token.value })
@@ -82,6 +85,7 @@ export const layer = Layer.effect(
           apiUrl: yield* Config.String("GITHUB_API_URL").pipe(
             Config.withDefault("https://api.github.com"),
           ),
+          slug: yield* Config.option(Config.String("GITHUB_APP_SLUG")),
           repos: (yield* Config.String("GITHUB_REPOS").pipe(Config.withDefault("")))
             .split(",")
             .map((s) => s.trim())
