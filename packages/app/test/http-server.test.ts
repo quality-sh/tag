@@ -8,6 +8,7 @@ import { BunHttpServer } from "@effect/platform-bun";
 import { ArtifactSource } from "../src/server/artifact-source.ts";
 import { Retention } from "../src/server/retention.ts";
 import { Auth } from "../src/server/auth.ts";
+import { Installation } from "../src/server/installation.ts";
 import { App } from "../src/server/http.ts";
 import { testLayer } from "./helpers.ts";
 
@@ -17,7 +18,9 @@ describe("the dashboard app", () => {
   test("answers 401 signed out, then serves the scans and the repository's own branch", async () => {
     const webRoot = await mkdtemp(join(tmpdir(), "tag-web-"));
     const { layer } = await testLayer(ArtifactSource.makeFixtures(SCAN_FIXTURES));
-    const services = Layer.mergeAll(Auth.layer, Retention.layer).pipe(Layer.provideMerge(layer));
+    const services = Layer.mergeAll(Auth.layer, Retention.layer, Installation.layer).pipe(
+      Layer.provideMerge(layer),
+    );
     // Reserve a port so the test knows where the server landed.
     const probe = Bun.listen({ hostname: "127.0.0.1", port: 0, socket: { data() {} } });
     const port = probe.port;
