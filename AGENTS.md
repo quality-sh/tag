@@ -196,3 +196,9 @@ bd prime                # Refresh Beads context
 
 **Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md for details and anti-patterns.
 <!-- END BEADS CODEX SETUP -->
+
+## Tickets
+
+Work is tracked in Beads (`bd`). The tickets are committed in `.beads/issues.jsonl`, so a
+fresh clone has them after `bd init --prefix tag && bd import`, run once. Every write
+re-exports that file and stages it, so commit it with the work it describes.

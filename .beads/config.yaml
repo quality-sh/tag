@@ -65,7 +65,10 @@
 # - linear.api_key  → use LINEAR_API_KEY env var instead
 # - github.token    → use GITHUB_TOKEN env var instead
 
-# Tickets travel with the repository: issues.jsonl is committed and a fresh clone
-# imports it on its first bd dolt pull.
-no-db: true
 issue-prefix: "tag"
+
+# Tickets travel with the repository: every write re-exports .beads/issues.jsonl and
+# stages it. A fresh clone reads them after `bd init --prefix tag && bd import`.
+export:
+  auto: true
+  git-add: true
