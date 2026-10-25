@@ -15,6 +15,8 @@ import { ResultStore } from "./result-store.ts";
 import { extractZip, ZipError } from "./zip.ts";
 
 export interface IngestSummary {
+  readonly waits: number;
+  readonly remaining: number | null;
   readonly runs: number;
   readonly refs: number;
   readonly artifacts: number;
@@ -172,7 +174,10 @@ export const layer = Layer.effect(
       repo: RepoRef,
       opts?: { readonly limit?: number; readonly branch?: string },
     ) {
+      const before = yield* source.requestStats();
       const acc = {
+        waits: 0,
+        remaining: null as number | null,
         runs: 0,
         refs: 0,
         artifacts: 0,
@@ -279,17 +284,23 @@ export const layer = Layer.effect(
           ),
         { concurrency: 4, discard: true },
       );
+      const after = yield* source.requestStats();
+      acc.waits = after.waits - before.waits;
+      acc.remaining = after.remaining;
       yield* Effect.logInfo(
-        `ingest ${repo.owner}/${repo.repo}: ${acc.runs} runs, ${acc.artifacts} artifacts, ${acc.inserted} new reports${acc.errors.length ? `, ${acc.errors.length} errors` : ""}`,
+        `ingest ${repo.owner}/${repo.repo}: ${acc.runs} runs, ${acc.artifacts} artifacts, ${acc.inserted} new reports, ${acc.waits} waits, ${acc.remaining ?? "unknown"} requests remaining${acc.errors.length ? `, ${acc.errors.length} errors` : ""}`,
       );
       return acc;
     });
 
     const ingestAll = Effect.fn("Ingest.ingestAll")(function* (opts?: { readonly limit?: number }) {
+      const before = yield* source.requestStats();
       const repos = yield* source
         .repos()
         .pipe(Effect.catchCause(() => Effect.succeed([] as ReadonlyArray<RepoRef>)));
       const total = {
+        waits: 0,
+        remaining: null as number | null,
         runs: 0,
         refs: 0,
         artifacts: 0,
@@ -308,6 +319,12 @@ export const layer = Layer.effect(
         total.cached += s.cached;
         total.errors.push(...s.errors);
       }
+      const after = yield* source.requestStats();
+      total.waits = after.waits - before.waits;
+      total.remaining = after.remaining;
+      yield* Effect.logInfo(
+        `ingest pass: ${total.waits} waits, ${total.remaining ?? "unknown"} requests remaining`,
+      );
       return total;
     });
 

@@ -8,6 +8,7 @@ import { buildZip, type ZipEntry } from "./zip.ts";
 export class SourceError extends Schema.TaggedError<SourceError>()("ArtifactSource.SourceError", {
   operation: Schema.String,
   detail: Schema.String,
+  status: Schema.optionalKey(Schema.Number),
   cause: Schema.optionalKey(Schema.Defect()),
 }) {}
 
@@ -44,6 +45,11 @@ export interface ArtifactMeta extends RepoRef {
 
 export interface Interface {
   readonly kind: "fixtures" | "github";
+  /** Cumulative rate-limit waits and the last reported request allowance. */
+  readonly requestStats: () => Effect.Effect<{
+    readonly waits: number;
+    readonly remaining: number | null;
+  }>;
   readonly repos: () => Effect.Effect<ReadonlyArray<RepoRef>, SourceError>;
   readonly listRuns: (
     repo: RepoRef,
@@ -250,6 +256,7 @@ export const makeFixtures = (dir: string): Interface => {
 
   return {
     kind: "fixtures",
+    requestStats: () => Effect.succeed({ waits: 0, remaining: null }),
     repos,
     listRuns,
     listArtifacts,

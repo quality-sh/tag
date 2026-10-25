@@ -2,8 +2,13 @@
 // group runs (releases, tags, pull requests, deployments). Talks to the REST API through
 // the Effect HttpClient with an App installation token or a plain token.
 import { createSign } from "node:crypto";
-import { Effect, Layer, Option, Redacted, Schedule, Schema } from "effect";
-import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
+import { Clock, Effect, Layer, Option, Redacted, Schedule, Schema, Semaphore } from "effect";
+import {
+  FetchHttpClient,
+  HttpClient,
+  HttpClientRequest,
+  type HttpClientResponse,
+} from "effect/http";
 import type { Ref } from "../grouping.ts";
 import { AppConfig, type GithubConfig } from "./config.ts";
 import {
@@ -94,6 +99,12 @@ const Deployment = Schema.Struct({
 });
 const InstallationToken = Schema.Struct({ token: Schema.String, expires_at: Schema.String });
 
+const headerNumber = (value: string | undefined): number | undefined => {
+  if (value === undefined || value.trim() === "") return undefined;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : undefined;
+};
+
 const PAGE = 100;
 const SHA = /^[0-9a-f]{40}$/;
 
@@ -128,9 +139,85 @@ export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig)
         }),
       ),
     ),
-    HttpClient.retryTransient({ times: 3, schedule: Schedule.exponential("500 millis") }),
+    // Rate-limit responses belong to request() so each wait is counted once.
+    HttpClient.retryTransient({
+      retryOn: "errors-only",
+      times: 3,
+      schedule: Schedule.exponential("500 millis"),
+    }),
+    HttpClient.transformResponse((response) =>
+      response.pipe(
+        Effect.repeat({
+          times: 3,
+          schedule: Schedule.exponential("500 millis"),
+          while: (res) => [408, 500, 502, 503, 504].includes(res.status),
+        }),
+      ),
+    ),
   );
   const api = base.pipe(HttpClient.mapRequest(HttpClientRequest.prependUrl(cfg.apiUrl)));
+
+  const requestGate = yield* Semaphore.make(1);
+  let waits = 0;
+  let remaining: number | null = null;
+  const requestStats = () => Effect.sync(() => ({ waits, remaining }));
+
+  // Hold the gate across the wait and retry: no other run spends requests during a cooldown.
+  const request = <E, R>(send: Effect.Effect<HttpClientResponse.HttpClientResponse, E, R>) =>
+    requestGate.withPermits(1)(
+      Effect.gen(function* () {
+        const read = send.pipe(
+          Effect.tap((res) =>
+            Effect.sync(() => {
+              const value = res.headers["x-ratelimit-remaining"];
+              if (value !== undefined) remaining = headerNumber(value) ?? remaining;
+            }),
+          ),
+        );
+        const res = yield* read;
+        if (res.status !== 403 && res.status !== 429) return res;
+        const now = yield* Clock.currentTimeMillis;
+        const retryAfter = res.headers["retry-after"];
+        const seconds = headerNumber(retryAfter);
+        const date =
+          retryAfter !== undefined && /^[A-Za-z]/.test(retryAfter) ? Date.parse(retryAfter) : NaN;
+        const reset = headerNumber(res.headers["x-ratelimit-reset"]);
+        const until =
+          seconds !== undefined
+            ? now + seconds * 1000
+            : Number.isFinite(date)
+              ? date
+              : reset !== undefined
+                ? reset * 1000
+                : undefined;
+        if (until === undefined) return res;
+        const delay = Math.max(0, until - now);
+        waits++;
+        yield* Effect.logInfo(`github: ${res.status}, waiting ${delay}ms before retrying`);
+        yield* Effect.sleep(delay);
+        return yield* read;
+      }),
+    );
+
+  const httpError = Effect.fn("GitHubSource.httpError")(function* (
+    res: HttpClientResponse.HttpClientResponse,
+    operation: string,
+    detail: string,
+  ) {
+    const body = yield* res.json.pipe(Effect.catch(() => Effect.succeed(null)));
+    const message =
+      body !== null &&
+      typeof body === "object" &&
+      "message" in body &&
+      typeof body.message === "string"
+        ? body.message
+        : "";
+    return yield* new SourceError({
+      operation,
+      status: res.status,
+      detail: `${detail}: GitHub answered ${res.status} ${message}`.trim(),
+    });
+  });
 
   const decode =
     <S extends Schema.Top>(schema: S, operation: string, detail: string) =>
@@ -146,14 +233,16 @@ export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig)
       : Effect.gen(function* () {
           const auth = cfg.auth as Extract<GithubConfig["auth"], { _tag: "app" }>;
           const jwt = yield* appJwt(auth.appId, auth.privateKey);
-          const res = yield* api
-            .post(`/app/installations/${auth.installationId}/access_tokens`, {
+          const response = yield* request(
+            api.post(`/app/installations/${auth.installationId}/access_tokens`, {
               headers: { authorization: `Bearer ${jwt}` },
-            })
-            .pipe(
-              Effect.flatMap((r) => r.json),
-              Effect.mapError(srcError("token", "installation token")),
-            );
+            }),
+          ).pipe(Effect.mapError(srcError("token", "installation token")));
+          if (response.status < 200 || response.status >= 300)
+            return yield* httpError(response, "token", "installation token");
+          const res = yield* response.json.pipe(
+            Effect.mapError(srcError("token", "installation token")),
+          );
           const t = yield* decode(InstallationToken, "token", "installation token")(res);
           yield* Effect.logInfo(`github: installation token minted, expires ${t.expires_at}`);
           return t.token;
@@ -166,28 +255,28 @@ export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig)
     schema: S,
     operation: string,
     detail: string,
+    cache?: Map<string, { etag: string; body: S["Type"] }>,
   ) =>
     Effect.gen(function* () {
       const t = yield* token;
       const fail = srcError(operation, `${detail}: ${path}`);
-      const res = yield* api
-        .get(path, { headers: { authorization: `Bearer ${t}` } })
-        .pipe(Effect.mapError(fail));
-      const status = res.status;
+      const previous = cache?.get(path);
+      const res = yield* request(
+        api.get(path, {
+          headers: {
+            authorization: `Bearer ${t}`,
+            ...(previous ? { "if-none-match": previous.etag } : {}),
+          },
+        }),
+      ).pipe(Effect.mapError(fail));
+      if (res.status === 304 && previous) return previous.body;
+      if (res.status < 200 || res.status >= 300) return yield* httpError(res, operation, detail);
       const body = yield* res.json.pipe(Effect.mapError(fail));
-      if (status < 200 || status >= 300) {
-        const msg =
-          body &&
-          typeof body === "object" &&
-          typeof (body as { message?: unknown }).message === "string"
-            ? (body as { message: string }).message
-            : "";
-        return yield* new SourceError({
-          operation,
-          detail: `${detail}: GitHub answered ${status} ${msg}`.trim(),
-        });
-      }
-      return yield* decode(schema, operation, detail)(body);
+      const decoded = yield* decode(schema, operation, detail)(body);
+      const etag = res.headers["etag"];
+      if (etag) cache?.set(path, { etag, body: decoded });
+      else cache?.delete(path);
+      return decoded;
     });
 
   /** Walk `page=` until a short page or `max` items. GitHub caps `per_page` at 100. */
@@ -198,11 +287,12 @@ export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig)
     max: number,
     operation: string,
     detail: string,
+    cache?: Map<string, { etag: string; body: S["Type"] }>,
   ) =>
     Effect.gen(function* () {
       const out: A[] = [];
       for (let page = 1; out.length < max; page++) {
-        const chunk = pick(yield* getJson(pathFor(page), schema, operation, detail));
+        const chunk = pick(yield* getJson(pathFor(page), schema, operation, detail, cache));
         out.push(...chunk);
         if (chunk.length < PAGE) break;
       }
@@ -230,6 +320,9 @@ export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig)
     return list.map((r): RepoRef => ({ owner: r.owner.login, repo: r.name }));
   });
 
+  // Cache each representation, including page, branch and limit. Revalidate on every pass.
+  // Keeping the body lets ingest retry indexed downloads even when the runs have not changed.
+  const runPages = new Map<string, { etag: string; body: typeof WorkflowRuns.Type }>();
   const listRuns = Effect.fn("GitHubSource.listRuns")(function* (
     repo: RepoRef,
     opts: { readonly limit: number; readonly branch?: string },
@@ -243,6 +336,7 @@ export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig)
       opts.limit,
       "listRuns",
       `${repo.owner}/${repo.repo}`,
+      runPages,
     );
     return runs.map((r): RunMeta => ({
       ...repo,
@@ -427,36 +521,31 @@ export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig)
   const openArtifact = Effect.fn("GitHubSource.openArtifact")(function* (artifact: ArtifactMeta) {
     const t = yield* token;
     const path = `${repoPath(artifact)}/actions/artifacts/${artifact.artifactId}/zip`;
-    const first = yield* api
-      .get(path, { headers: { authorization: `Bearer ${t}` } })
-      .pipe(
-        Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual" }),
-        Effect.mapError(srcError("openArtifact", artifact.artifactId)),
-      );
+    const first = yield* request(api.get(path, { headers: { authorization: `Bearer ${t}` } })).pipe(
+      Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual" }),
+      Effect.mapError(srcError("openArtifact", artifact.artifactId)),
+    );
     const location = Option.fromNullishOr(first.headers["location"]);
     if (first.status === 410)
-      return yield* new SourceError({
-        operation: "openArtifact",
-        detail: `${artifact.artifactId}: the source has expired this artifact`,
-      });
+      return yield* httpError(
+        first,
+        "openArtifact",
+        `${artifact.artifactId}: the source has expired this artifact`,
+      );
     const fail = srcError("openArtifact", `${artifact.artifactId}: downloading the zip`);
-    const bytes =
+    const response =
       first.status >= 300 && first.status < 400 && Option.isSome(location)
-        ? yield* base.get(location.value).pipe(
-            Effect.flatMap((r) => r.arrayBuffer),
-            Effect.mapError(fail),
-          )
-        : first.status < 300
-          ? yield* first.arrayBuffer.pipe(Effect.mapError(fail))
-          : yield* new SourceError({
-              operation: "openArtifact",
-              detail: `${artifact.artifactId}: ${first.status} from ${path}`,
-            });
+        ? yield* request(base.get(location.value)).pipe(Effect.mapError(fail))
+        : first;
+    if (response.status < 200 || response.status >= 300)
+      return yield* httpError(response, "openArtifact", artifact.artifactId);
+    const bytes = yield* response.arrayBuffer.pipe(Effect.mapError(fail));
     return new Uint8Array(bytes);
   });
 
   const source: Interface = {
     kind: "github",
+    requestStats,
     repos,
     listRuns,
     listArtifacts,
