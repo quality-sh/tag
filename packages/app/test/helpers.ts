@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Context, Deferred, Effect, Layer, Option, Redacted } from "effect";
@@ -33,7 +34,27 @@ export const testConfig = (overrides: Partial<AppConfig.Interface> = {}): AppCon
   ...overrides,
 });
 
+// bun test never runs process exit hooks, so every run sweeps the temp dirs of the
+// runs that came before it: the suite hands out dozens of megabyte-scale store dirs
+// per run, and without this, looping the suite floods /tmp with writeback that
+// stalls fsync-heavy steps (SQLite open and close) for whole seconds.
+const sweepLeakedTmpDirs = () => {
+  const cutoff = Date.now() - 10 * 60 * 1000;
+  try {
+    for (const entry of readdirSync(tmpdir())) {
+      if (!entry.startsWith("tag-")) continue;
+      const full = join(tmpdir(), entry);
+      if (statSync(full).mtimeMs < cutoff) rmSync(full, { recursive: true, force: true });
+    }
+  } catch {
+    // A missing or crowded tmpdir only means less to sweep; the suite runs regardless.
+  }
+};
+sweepLeakedTmpDirs();
+
 export const tmpDir = () => mkdtemp(join(tmpdir(), "tag-"));
+/** Same as `tmpDir`, where the caller needs the path before any await. */
+export const tmpDirSync = () => mkdtempSync(join(tmpdir(), "tag-"));
 
 /** Full stack on a temp filesystem store and an in-memory index. */
 export const testLayer = async (
@@ -147,13 +168,16 @@ export const serveApp = async (
   );
   const ready = Deferred.makeUnsafe<string>();
   const done = Deferred.makeUnsafe<void>();
-  // The tap sees the server once it is listening; the same layer value builds once, so the
-  // port the tap reads is the port the app serves on.
+  // Bun.serve listens immediately but answers with a placeholder 404 handler until
+  // HttpRouter.serve installs the app, which happens later in the served layer's own
+  // build. So the server tap only captures the listening address, and `ready` waits
+  // for the whole served layer to be built: the first request always meets the app.
+  const listening = Deferred.makeUnsafe<string>();
   const bunServer = BunHttpServer.layer({ port: 0, hostname: "127.0.0.1" }).pipe(
     Layer.tap((ctx) =>
       Effect.gen(function* () {
         const server = Context.get(ctx, HttpServer.HttpServer);
-        yield* Deferred.succeed(ready, HttpServer.formatAddress(server.address));
+        yield* Deferred.succeed(listening, HttpServer.formatAddress(server.address));
       }),
     ),
   );
@@ -162,7 +186,8 @@ export const serveApp = async (
     Effect.scoped(
       Effect.gen(function* () {
         yield* Layer.build(served);
-        yield* Deferred.await(ready);
+        const base = yield* Deferred.await(listening);
+        yield* Deferred.succeed(ready, base);
         yield* Deferred.await(done);
       }),
     ),

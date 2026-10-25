@@ -1,15 +1,13 @@
 // The Installation service over the real SQLite store: the ref, the settings row, the
 // boot seed, and what survives a reopen.
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Layer, Option, Redacted } from "effect";
 import { AppConfig, type GithubConfig } from "../src/server/config.ts";
 import { ArtifactStore } from "../src/server/artifact-store.ts";
 import { ResultStore } from "../src/server/result-store.ts";
 import { Installation } from "../src/server/installation.ts";
-import { testConfig } from "./helpers.ts";
+import { testConfig, tmpDirSync } from "./helpers.ts";
 
 const appGithub = (installationId: Option.Option<string>): GithubConfig => ({
   auth: { _tag: "app", appId: "12345", privateKey: Redacted.make("key"), installationId },
@@ -33,7 +31,7 @@ const stack = (dir: string, github: Option.Option<GithubConfig> = Option.none())
   return Layer.mergeAll(config, results, installation);
 };
 
-const newDir = () => mkdtempSync(join(tmpdir(), "tag-installation-"));
+const newDir = () => tmpDirSync();
 
 describe("Installation", () => {
   test("the env seed applies when nothing is stored", async () => {

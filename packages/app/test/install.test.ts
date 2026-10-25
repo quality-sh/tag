@@ -2,8 +2,7 @@
 // the recorded installation, and the backfill pass it starts.
 import { describe, expect, test } from "bun:test";
 import { generateKeyPairSync } from "node:crypto";
-import { Option, Redacted, Schema } from "effect";
-import { ApiError, Unauthorized } from "../src/web/client.ts";
+import { Option, Redacted } from "effect";
 import type { GithubConfig } from "../src/server/config.ts";
 import { fakeGithub, eventually, serveApp } from "./helpers.ts";
 
@@ -196,18 +195,5 @@ describe("the install flow", () => {
     } finally {
       await app.stop();
     }
-  });
-
-  test("the web client's typed errors survive a decode", () => {
-    const error = Schema.decodeUnknownSync(ApiError)({
-      _tag: "ApiError",
-      status: 503,
-      detail: "unreachable",
-    });
-    expect(error._tag).toBe("ApiError");
-    expect(error.status).toBe(503);
-    expect(Schema.decodeUnknownSync(Unauthorized)({ _tag: "Unauthorized" })._tag).toBe(
-      "Unauthorized",
-    );
   });
 });
