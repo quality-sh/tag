@@ -1,11 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { generateKeyPairSync } from "node:crypto";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Deferred, Effect, Fiber, Layer, Option, Redacted } from "effect";
 import { TestClock } from "effect/testing";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { AppConfig, type GithubConfig } from "../src/server/config.ts";
 import { ArtifactSource } from "../src/server/artifact-source.ts";
+import { ArtifactStore } from "../src/server/artifact-store.ts";
 import { GitHubSource } from "../src/server/github-source.ts";
+import { Installation } from "../src/server/installation.ts";
+import { ResultStore } from "../src/server/result-store.ts";
 import { Ingest } from "../src/server/ingest.ts";
 import { buildZip } from "../src/server/zip.ts";
 import { testConfig, testLayer } from "./helpers.ts";
@@ -53,11 +59,21 @@ const cfg = (over: Partial<GithubConfig> = {}): GithubConfig => ({
   ...over,
 });
 
-const sourceWith = (g: GithubConfig, http: Layer.Layer<HttpClient.HttpClient>) =>
-  GitHubSource.layer.pipe(
-    Layer.provide(http),
-    Layer.provide(Layer.succeed(AppConfig.Service, testConfig({ github: Option.some(g) }))),
+/** The source over the fake GitHub, with the real Installation service underneath. */
+const sourceWith = (g: GithubConfig, http: Layer.Layer<HttpClient.HttpClient>) => {
+  const config = Layer.succeed(AppConfig.Service, testConfig({ github: Option.some(g) }));
+  const store = ArtifactStore.layerFs(join(mkdtempSync(join(tmpdir(), "tag-")), "store"));
+  const results = ResultStore.layer.pipe(Layer.provide(Layer.mergeAll(config, store)));
+  const installation = Installation.layer.pipe(
+    Layer.provide(Layer.mergeAll(config, results)),
+    Layer.orDie,
   );
+  return GitHubSource.layer.pipe(
+    Layer.provide(http),
+    Layer.provideMerge(installation),
+    Layer.provide(config),
+  );
+};
 
 const using = <A, E>(
   layer: Layer.Layer<ArtifactSource.Service>,
@@ -717,7 +733,7 @@ describe("GitHubSource", () => {
         _tag: "app",
         appId: "12345",
         privateKey: Redacted.make(pem),
-        installationId: "555",
+        installationId: Option.some("555"),
       },
     });
     const repos = await using(sourceWith(app, gh.layer), (s) =>
@@ -735,5 +751,47 @@ describe("GitHubSource", () => {
     ]);
     expect(gh.hits[0]?.auth?.split(".").length).toBe(3);
     expect(gh.hits[1]?.auth).toBe("Bearer ghs_installation");
+  });
+
+  test("an App source fails typed before an installation is recorded, and a live record flips it", async () => {
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const pem = privateKey.export({ type: "pkcs1", format: "pem" }).toString();
+    const gh = fakeGithub({
+      "/app/installations/555/access_tokens": () => ({
+        token: "ghs_installation",
+        expires_at: "2026-10-24T12:00:00Z",
+      }),
+      "/installation/repositories": () => ({
+        repositories: [{ name: "widgets", owner: { login: "acme" } }],
+      }),
+    });
+    const app = cfg({
+      repos: [],
+      auth: {
+        _tag: "app",
+        appId: "12345",
+        privateKey: Redacted.make(pem),
+        installationId: Option.none(),
+      },
+    });
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const installation = yield* Installation.Service;
+        const source = yield* ArtifactSource.Service;
+        // Every GitHub call fails typed, and none of them reaches the wire.
+        const error = yield* source.repos().pipe(Effect.flip);
+        expect(error._tag).toBe("ArtifactSource.SourceError");
+        expect(error.detail).toContain("no installation recorded yet");
+        expect(gh.hits).toHaveLength(0);
+        yield* installation.record("555");
+        expect(yield* source.repos()).toEqual([{ owner: "acme", repo: "widgets" }]);
+        // The same running source: one mint, then the installation token.
+        expect(gh.hits.map((h) => [h.method, h.url.pathname])).toEqual([
+          ["POST", "/app/installations/555/access_tokens"],
+          ["GET", "/installation/repositories"],
+        ]);
+        expect(gh.hits[1]?.auth).toBe("Bearer ghs_installation");
+      }).pipe(Effect.provide(sourceWith(app, gh.layer))),
+    );
   });
 });

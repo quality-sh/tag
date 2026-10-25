@@ -15,7 +15,8 @@ export type GithubAuth =
       readonly _tag: "app";
       readonly appId: string;
       readonly privateKey: Redacted.Redacted<string>;
-      readonly installationId: string;
+      /** The seed from the last boot; an installation recorded at runtime takes over. */
+      readonly installationId: Option.Option<string>;
     };
 
 export interface GithubConfig {
@@ -71,7 +72,7 @@ export const layer = Layer.effect(
           _tag: "app",
           appId: appId.value,
           privateKey: yield* Config.Redacted("GITHUB_APP_PRIVATE_KEY"),
-          installationId: yield* Config.String("GITHUB_INSTALLATION_ID"),
+          installationId: yield* Config.option(Config.String("GITHUB_INSTALLATION_ID")),
         })
       : Option.isSome(token)
         ? Option.some({ _tag: "token", token: token.value })
