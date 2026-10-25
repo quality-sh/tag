@@ -103,6 +103,20 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Install the Playwright browser the fixture builder uses
         run: bunx playwright install --with-deps chromium-headless-shell
+      - name: Create the bucket the S3 contract test uses
+        # docker-compose does this with its rustfs-init container; a service container has no such hook.
+        env:
+          AWS_ACCESS_KEY_ID: tag
+          AWS_SECRET_ACCESS_KEY: tagdev
+          AWS_EC2_METADATA_DISABLED: "true"
+        run: |
+          for _ in $(seq 1 30); do
+            aws --endpoint-url http://localhost:9000 --region us-east-1 s3api head-bucket --bucket tag 2>/dev/null && exit 0
+            aws --endpoint-url http://localhost:9000 --region us-east-1 s3api create-bucket --bucket tag 2>/dev/null && exit 0
+            sleep 1
+          done
+          echo "bucket init failed"
+          exit 1
       - name: Run tests with coverage
         run: bun run test:coverage
       - name: Require 80% changed executable line coverage
