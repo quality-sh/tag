@@ -38,6 +38,8 @@ export interface ArtifactMeta extends RepoRef {
   /** ISO 8601, when the source will delete it. */
   readonly expiresAt?: string;
   readonly expired?: boolean;
+  readonly branch?: string;
+  readonly commit?: string;
 }
 
 export interface Interface {
@@ -48,6 +50,11 @@ export interface Interface {
     opts: { readonly limit: number; readonly branch?: string },
   ) => Effect.Effect<ReadonlyArray<RunMeta>, SourceError>;
   readonly listArtifacts: (run: RunMeta) => Effect.Effect<ReadonlyArray<ArtifactMeta>, SourceError>;
+  /** Repository listing for runs needing an index. An empty set checks only the newest page. */
+  readonly listRepoArtifacts: (
+    repo: RepoRef,
+    runIds: ReadonlySet<string>,
+  ) => Effect.Effect<ReadonlyArray<ArtifactMeta>, SourceError>;
   /** Releases, tags, pull requests and deployments the source knows for a repository. */
   readonly listRefs: (repo: RepoRef) => Effect.Effect<ReadonlyArray<Ref>, SourceError>;
   /** The artifact as zip bytes. */
@@ -190,6 +197,25 @@ export const makeFixtures = (dir: string): Interface => {
       catch: srcError("listArtifacts", run.runId),
     });
 
+  const listRepoArtifacts = Effect.fn("Fixtures.listRepoArtifacts")(function* (
+    repo: RepoRef,
+    runIds: ReadonlySet<string>,
+  ) {
+    const runs = yield* listRuns(repo, { limit: Infinity });
+    const artifacts: ArtifactMeta[] = [];
+    for (const run of runs) {
+      if (!runIds.has(run.runId)) continue;
+      for (const artifact of yield* listArtifacts(run)) {
+        artifacts.push({
+          ...artifact,
+          ...(run.branch ? { branch: run.branch } : {}),
+          ...(run.commit ? { commit: run.commit } : {}),
+        });
+      }
+    }
+    return artifacts;
+  });
+
   const listRefs = (repo: RepoRef) =>
     Effect.tryPromise({
       try: async () => {
@@ -222,7 +248,15 @@ export const makeFixtures = (dir: string): Interface => {
       catch: srcError("openArtifact", artifact.artifactId),
     });
 
-  return { kind: "fixtures", repos, listRuns, listArtifacts, listRefs, openArtifact };
+  return {
+    kind: "fixtures",
+    repos,
+    listRuns,
+    listArtifacts,
+    listRepoArtifacts,
+    listRefs,
+    openArtifact,
+  };
 };
 
 export const layerFixtures = (dir: string) =>

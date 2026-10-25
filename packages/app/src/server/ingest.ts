@@ -205,51 +205,59 @@ export const layer = Layer.effect(
       const seen = yield* results
         .seenRuns(repo.owner, repo.repo)
         .pipe(Effect.catchCause(() => Effect.succeed(new Set<string>() as ReadonlySet<string>)));
-      // A completed run never changes: list its artifacts once, then work from the index.
+      const unseen = new Set(runs.filter((run) => !seen.has(run.runId)).map((run) => run.runId));
+      const artifacts = yield* source.listRepoArtifacts(repo, unseen).pipe(
+        Effect.catch((error) => {
+          acc.errors.push(`listRepoArtifacts ${repo.owner}/${repo.repo}: ${String(error)}`);
+          return Effect.succeed(undefined);
+        }),
+      );
+      const byRun = new Map<string, ArtifactMeta[]>();
+      for (const artifact of artifacts ?? []) {
+        const group = byRun.get(artifact.runId) ?? [];
+        group.push(artifact);
+        byRun.set(artifact.runId, group);
+      }
+      // A completed run never changes. Retry failed downloads from its indexed rows.
       const artifactsOf = Effect.fn("Ingest.artifactsOf")(function* (run: RunMeta) {
-        if (seen.has(run.runId)) {
-          const rows = yield* results.artifactsOfRun(run.owner, run.repo, run.runId);
-          return {
-            fresh: false,
-            artifacts: rows.map((r): ArtifactMeta => ({
-              artifactId: r.artifactId,
-              owner: r.owner,
-              repo: r.repo,
-              runId: r.runId,
-              name: r.name,
-              sizeBytes: r.sizeBytes,
-              ...(r.expiresAt ? { expiresAt: r.expiresAt } : {}),
-              // Cached ones have been through the adapters already.
-              expired: r.state !== "listed",
-            })),
-          };
-        }
-        return { fresh: true, artifacts: yield* source.listArtifacts(run) };
+        if (!seen.has(run.runId)) return byRun.get(run.runId) ?? [];
+        const rows = yield* results.artifactsOfRun(run.owner, run.repo, run.runId);
+        return rows
+          .filter((r) => r.state === "listed")
+          .map((r): ArtifactMeta => ({
+            artifactId: r.artifactId,
+            owner: r.owner,
+            repo: r.repo,
+            runId: r.runId,
+            name: r.name,
+            sizeBytes: r.sizeBytes,
+            ...(r.expiresAt ? { expiresAt: r.expiresAt } : {}),
+          }));
       });
       const ingestRun = Effect.fn("Ingest.ingestRun")(function* (run: RunMeta) {
+        const fresh = !seen.has(run.runId);
+        if (fresh && artifacts === undefined) return;
+        const listed = yield* artifactsOf(run);
+        if (!fresh && listed.length === 0) return;
         acc.runs++;
-        const listed = yield* artifactsOf(run).pipe(
-          Effect.catchCause((c) => {
-            acc.errors.push(`listArtifacts ${run.runId}: ${String(c)}`);
-            return Effect.succeed({ fresh: false, artifacts: [] as ReadonlyArray<ArtifactMeta> });
-          }),
-        );
-        for (const artifact of listed.artifacts) {
+        if (fresh) {
+          for (const artifact of listed) {
+            yield* results.upsertArtifact({
+              artifactId: artifact.artifactId,
+              owner: artifact.owner,
+              repo: artifact.repo,
+              runId: artifact.runId,
+              name: artifact.name,
+              sizeBytes: artifact.sizeBytes,
+              expiresAt: artifact.expiresAt ?? null,
+              state: artifact.expired ? "expired" : "listed",
+              cachedAt: null,
+            });
+          }
+          yield* results.markRunSeen(run.owner, run.repo, run.runId);
+        }
+        for (const artifact of listed) {
           acc.artifacts++;
-          if (listed.fresh)
-            yield* results
-              .upsertArtifact({
-                artifactId: artifact.artifactId,
-                owner: artifact.owner,
-                repo: artifact.repo,
-                runId: artifact.runId,
-                name: artifact.name,
-                sizeBytes: artifact.sizeBytes,
-                expiresAt: artifact.expiresAt ?? null,
-                state: artifact.expired ? "expired" : "listed",
-                cachedAt: null,
-              })
-              .pipe(Effect.ignore);
           if (artifact.expired) continue;
           yield* ingestArtifact(run, artifact, acc).pipe(
             Effect.catchCause((c) => {
@@ -258,11 +266,19 @@ export const layer = Layer.effect(
             }),
           );
         }
-        if (listed.fresh)
-          yield* results.markRunSeen(run.owner, run.repo, run.runId).pipe(Effect.ignore);
       });
       // A few runs at a time: GitHub's secondary limits frown on a burst of parallel calls.
-      yield* Effect.forEach(runs, ingestRun, { concurrency: 4, discard: true });
+      yield* Effect.forEach(
+        runs,
+        (run) =>
+          ingestRun(run).pipe(
+            Effect.catch((error) => {
+              acc.errors.push(`index ${run.runId}: ${String(error)}`);
+              return Effect.void;
+            }),
+          ),
+        { concurrency: 4, discard: true },
+      );
       yield* Effect.logInfo(
         `ingest ${repo.owner}/${repo.repo}: ${acc.runs} runs, ${acc.artifacts} artifacts, ${acc.inserted} new reports${acc.errors.length ? `, ${acc.errors.length} errors` : ""}`,
       );

@@ -158,6 +158,71 @@ describe("GitHubSource", () => {
     ]);
   });
 
+  test("lists repository artifacts across pages with run, branch and commit metadata", async () => {
+    const artifact = (id: number, runId = 1001) => ({
+      id,
+      name: "report",
+      size_in_bytes: 123,
+      expired: false,
+      expires_at: "2027-01-01T00:00:00Z",
+      workflow_run: { id: runId, head_branch: "main", head_sha: "abc123" },
+    });
+    const gh = fakeGithub({
+      "/repos/acme/widgets/actions/artifacts": (url) => ({
+        artifacts:
+          url.searchParams.get("page") === "1"
+            ? Array.from({ length: 100 }, (_, i) => artifact(200 - i, i === 0 ? 1002 : 1001))
+            : [artifact(100)],
+      }),
+    });
+    const arts = await using(sourceWith(cfg(), gh.layer), (s) =>
+      s.listRepoArtifacts({ owner: "acme", repo: "widgets" }, new Set(["1001"])),
+    );
+    expect(arts).toHaveLength(100);
+    expect(arts[99]).toEqual({
+      owner: "acme",
+      repo: "widgets",
+      artifactId: "100",
+      runId: "1001",
+      name: "report",
+      sizeBytes: 123,
+      expired: false,
+      expiresAt: "2027-01-01T00:00:00Z",
+      branch: "main",
+      commit: "abc123",
+    });
+    expect(
+      gh.hits.map((h) => [
+        h.url.pathname,
+        h.url.searchParams.get("per_page"),
+        h.url.searchParams.get("page"),
+      ]),
+    ).toEqual([
+      ["/repos/acme/widgets/actions/artifacts", "100", "1"],
+      ["/repos/acme/widgets/actions/artifacts", "100", "2"],
+    ]);
+    expect(gh.hits[0]?.auth).toBe("Bearer ghp_test");
+  });
+
+  test("checks only one full artifact page when no runs need indexing", async () => {
+    const gh = fakeGithub({
+      "/repos/acme/widgets/actions/artifacts": () => ({
+        artifacts: Array.from({ length: 100 }, (_, id) => ({
+          id,
+          name: "report",
+          size_in_bytes: 1,
+          expired: false,
+          workflow_run: { id: 1001, head_branch: null, head_sha: "abc123" },
+        })),
+      }),
+    });
+    const arts = await using(sourceWith(cfg(), gh.layer), (s) =>
+      s.listRepoArtifacts({ owner: "acme", repo: "widgets" }, new Set()),
+    );
+    expect(arts).toEqual([]);
+    expect(gh.hits).toHaveLength(1);
+  });
+
   test("builds refs from releases, tags, pull requests and deployments", async () => {
     const gh = fakeGithub({
       "/repos/acme/widgets/releases": () => [

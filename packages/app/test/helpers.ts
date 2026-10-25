@@ -29,11 +29,13 @@ export const testConfig = (overrides: Partial<AppConfig.Interface> = {}): AppCon
 export const tmpDir = () => mkdtemp(join(tmpdir(), "tag-"));
 
 /** Full stack on a temp filesystem store and an in-memory index. */
-export const testLayer = async () => {
+export const testLayer = async (sourceOverride?: ArtifactSource.Interface) => {
   const dir = await tmpDir();
   const config = Layer.succeed(AppConfig.Service, testConfig());
   const store = ArtifactStore.layerFs(join(dir, "store"));
-  const source = ArtifactSource.layerFixtures(FIXTURES);
+  const source = sourceOverride
+    ? Layer.succeed(ArtifactSource.Service, sourceOverride)
+    : ArtifactSource.layerFixtures(FIXTURES);
   const results = ResultStore.layer.pipe(Layer.provide(Layer.mergeAll(config, store)));
   const ingest = Ingest.layer.pipe(Layer.provide(Layer.mergeAll(config, store, source, results)));
   return { dir, layer: Layer.mergeAll(config, store, source, results, ingest) };

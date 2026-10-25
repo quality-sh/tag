@@ -49,6 +49,18 @@ const Artifact = Schema.Struct({
   expires_at: Nullable(Schema.String),
 });
 const Artifacts = Schema.Struct({ artifacts: Schema.Array(Artifact) });
+const RepoArtifacts = Schema.Struct({
+  artifacts: Schema.Array(
+    Schema.Struct({
+      ...Artifact.fields,
+      workflow_run: Schema.Struct({
+        id: Schema.Number,
+        head_branch: Nullable(Schema.String),
+        head_sha: Schema.String,
+      }),
+    }),
+  ),
+});
 
 const Release = Schema.Struct({
   tag_name: Schema.String,
@@ -267,6 +279,35 @@ export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig)
     }));
   });
 
+  const listRepoArtifacts = Effect.fn("GitHubSource.listRepoArtifacts")(function* (
+    repo: RepoRef,
+    runIds: ReadonlySet<string>,
+  ) {
+    const list = yield* pages(
+      (p) => `${repoPath(repo)}/actions/artifacts?per_page=${PAGE}&page=${p}`,
+      RepoArtifacts,
+      (x) => x.artifacts,
+      // With no unseen runs, one page suffices. Otherwise finish the listing before marking
+      // any run seen: its artifacts can span pages and interleave with other runs.
+      runIds.size === 0 ? PAGE : Infinity,
+      "listRepoArtifacts",
+      `${repo.owner}/${repo.repo}`,
+    );
+    return list
+      .filter((a) => runIds.has(String(a.workflow_run.id)))
+      .map((a): ArtifactMeta => ({
+        ...repo,
+        runId: String(a.workflow_run.id),
+        artifactId: String(a.id),
+        name: a.name,
+        sizeBytes: a.size_in_bytes,
+        expired: a.expired,
+        ...(a.expires_at ? { expiresAt: a.expires_at } : {}),
+        ...(a.workflow_run.head_branch ? { branch: a.workflow_run.head_branch } : {}),
+        commit: a.workflow_run.head_sha,
+      }));
+  });
+
   const listRefs = Effect.fn("GitHubSource.listRefs")(function* (repo: RepoRef) {
     const detail = `${repo.owner}/${repo.repo}`;
     const [releases, tags, pulls, deployments] = yield* Effect.all(
@@ -419,6 +460,7 @@ export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig)
     repos,
     listRuns,
     listArtifacts,
+    listRepoArtifacts,
     listRefs,
     openArtifact,
   };
