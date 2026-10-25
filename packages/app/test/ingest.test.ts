@@ -5,6 +5,7 @@ import { ApiRoutes } from "../src/server/http.ts";
 import { Auth } from "../src/server/auth.ts";
 import { Retention } from "../src/server/retention.ts";
 import { Ingest } from "../src/server/ingest.ts";
+import { Installation } from "../src/server/installation.ts";
 import { ResultStore } from "../src/server/result-store.ts";
 import { ArtifactStore } from "../src/server/artifact-store.ts";
 import { ArtifactSource } from "../src/server/artifact-source.ts";
@@ -55,7 +56,11 @@ describe("ingest pipeline (fixtures -> fs store -> sqlite)", () => {
     const { layer } = await testLayer(source);
     const app = HttpRouter.toWebHandler(
       ApiRoutes.pipe(
-        Layer.provide(Layer.mergeAll(Auth.layer, Retention.layer).pipe(Layer.provideMerge(layer))),
+        Layer.provide(
+          Layer.mergeAll(Auth.layer, Retention.layer, Installation.layer).pipe(
+            Layer.provideMerge(layer),
+          ),
+        ),
       ),
       { disableLogger: true },
     );
