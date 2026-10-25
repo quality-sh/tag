@@ -204,7 +204,8 @@ export const ApiRoutes = HttpRouter.use((router) =>
         const all = yield* results.reports({ since });
         const refs = yield* results.refs();
         const collections = yield* results.collections();
-        const branches = defaultBranchesOf(yield* results.scans());
+        const scans = yield* results.scans();
+        const branches = defaultBranchesOf(scans);
         const filters = filtersOf(collections, q.get("c"), q.get("q"));
         const reports = filters.length
           ? matching({ reports: all, refs, filters, since }).kept
@@ -220,6 +221,7 @@ export const ApiRoutes = HttpRouter.use((router) =>
           range,
           query: q.get("q") ?? "",
           repos: computeOverview({ reports, refs, since, defaultBranches: branches }),
+          scans: Object.fromEntries(scans.map((s) => [`${s.owner}/${s.repo}`, s])),
           collections: collectionRows(collections, all, refs, since),
           counts: { ...counts, run: runsOf(reports).length },
           repoList: yield* results.repos(),

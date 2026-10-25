@@ -33,6 +33,7 @@ describe("ingest scan (fixtures-scan -> fs store -> sqlite)", () => {
           reporting: ["test-results-ubuntu-latest"],
           unread: [],
           names: ["test-results-ubuntu-latest"],
+          defaultBranch: "trunk",
         });
         expect(Option.getOrNull(yield* results.scanOf("acme", "scanrepo"))!.scannedAt).toBeString();
         expect(
