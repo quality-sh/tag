@@ -1,11 +1,8 @@
 {
-  "packages/app/src/grouping.ts": 1036,
-  "packages/app/src/web/home.tsx": 971,
   "packages/app/test/github-source.test.ts": 927,
   "packages/app/src/server/result-store.ts": 909,
   "packages/app/src/server/github-source.ts": 710,
   "packages/ui/src/groups.tsx": 653,
-  "packages/app/src/web/main.tsx": 613,
   "packages/app/src/server/ingest.ts": 608,
   "packages/app/src/server/http.ts": 595,
   "packages/app/test/ingest.test.ts": 541,
