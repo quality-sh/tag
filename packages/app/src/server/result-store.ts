@@ -93,6 +93,17 @@ export interface ArtifactRow {
   readonly cachedAt: string | null;
 }
 
+/** Where a repository stands: first sight, walking its history back, or caught up. */
+export interface RepositoryRow {
+  readonly owner: string;
+  readonly repo: string;
+  readonly state: "new" | "backfilling" | "current";
+  readonly backfillDone: number;
+  readonly backfillTotal: number | null;
+  readonly firstSeenAt: string;
+  readonly updatedAt: string;
+}
+
 export interface RunFilter {
   readonly owner?: string;
   readonly repo?: string;
@@ -140,6 +151,15 @@ export interface Interface {
     runId: string,
   ) => Effect.Effect<void, DbError>;
   readonly seenRuns: (owner: string, repo: string) => Effect.Effect<ReadonlySet<string>, DbError>;
+  readonly repository: (
+    owner: string,
+    repo: string,
+  ) => Effect.Effect<Option.Option<RepositoryRow>, DbError>;
+  readonly repositories: () => Effect.Effect<ReadonlyArray<RepositoryRow>, DbError>;
+  /** Insert on first sight, keeping that time; later calls move the state and progress. */
+  readonly upsertRepository: (
+    row: Pick<RepositoryRow, "owner" | "repo" | "state" | "backfillDone" | "backfillTotal">,
+  ) => Effect.Effect<void, DbError>;
   /** After a sweep: the files are gone, so the row is "listed" again, or "expired" when the source is too. */
   readonly markArtifactSwept: (
     artifactId: string,
@@ -207,6 +227,10 @@ CREATE TABLE IF NOT EXISTS artifacts (
 CREATE INDEX IF NOT EXISTS artifacts_run ON artifacts(owner, repo, run_id);
 CREATE TABLE IF NOT EXISTS runs_seen (
   owner TEXT NOT NULL, repo TEXT NOT NULL, run_id TEXT NOT NULL, seen_at TEXT NOT NULL, PRIMARY KEY (owner, repo, run_id)
+);
+CREATE TABLE IF NOT EXISTS repositories (
+  owner TEXT NOT NULL, repo TEXT NOT NULL, state TEXT NOT NULL, backfill_done INTEGER NOT NULL DEFAULT 0,
+  backfill_total INTEGER, first_seen_at TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (owner, repo)
 );
 CREATE TABLE IF NOT EXISTS report_tags (report_id TEXT NOT NULL, tag TEXT NOT NULL, PRIMARY KEY (report_id, tag));
 CREATE INDEX IF NOT EXISTS report_tags_tag ON report_tags(tag);
@@ -494,6 +518,46 @@ export const make = (db: Database, store: ArtifactStore.Interface): Interface =>
         ) as ReadonlySet<string>,
     );
 
+  const REPOSITORY_COLS = `owner, repo, state, backfill_done AS backfillDone, backfill_total AS backfillTotal,
+    first_seen_at AS firstSeenAt, updated_at AS updatedAt`;
+  const repository = (owner: string, repo: string) =>
+    trySync("repository", () =>
+      Option.fromNullOr(
+        db
+          .query<RepositoryRow, [string, string]>(
+            `SELECT ${REPOSITORY_COLS} FROM repositories WHERE owner = ? AND repo = ?`,
+          )
+          .get(owner, repo),
+      ),
+    );
+  const repositories = () =>
+    trySync("repositories", () =>
+      db
+        .query<RepositoryRow, []>(
+          `SELECT ${REPOSITORY_COLS} FROM repositories ORDER BY owner, repo`,
+        )
+        .all(),
+    );
+  const upsertRepository = (
+    row: Pick<RepositoryRow, "owner" | "repo" | "state" | "backfillDone" | "backfillTotal">,
+  ) =>
+    trySync("upsertRepository", () => {
+      const now = new Date().toISOString();
+      db.query<unknown, Params>(
+        `INSERT INTO repositories (owner, repo, state, backfill_done, backfill_total, first_seen_at, updated_at)
+         VALUES ($owner, $repo, $state, $done, $total, $now, $now)
+         ON CONFLICT(owner, repo) DO UPDATE SET state = excluded.state, backfill_done = excluded.backfill_done,
+           backfill_total = excluded.backfill_total, updated_at = excluded.updated_at`,
+      ).run({
+        $owner: row.owner,
+        $repo: row.repo,
+        $state: row.state,
+        $done: row.backfillDone,
+        $total: row.backfillTotal,
+        $now: now,
+      });
+    });
+
   const artifactsOfRun = (owner: string, repo: string, runId: string) =>
     trySync("artifactsOfRun", () =>
       db
@@ -686,6 +750,9 @@ export const make = (db: Database, store: ArtifactStore.Interface): Interface =>
     getArtifact,
     markRunSeen,
     seenRuns,
+    repository,
+    repositories,
+    upsertRepository,
     cachedArtifactsBefore,
     markArtifactSwept,
     repos,

@@ -107,6 +107,8 @@ const headerNumber = (value: string | undefined): number | undefined => {
 };
 
 const PAGE = 100;
+/** GitHub stops paging a run listing here; a longer walk narrows its date window. */
+const RUN_CAP = 1000;
 const SHA = /^[0-9a-f]{40}$/;
 
 // ---------------------------------------------------------------------------
@@ -337,19 +339,46 @@ export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig)
   const runPages = new Map<string, { etag: string; body: typeof WorkflowRuns.Type }>();
   const listRuns = Effect.fn("GitHubSource.listRuns")(function* (
     repo: RepoRef,
-    opts: { readonly limit: number; readonly branch?: string },
+    opts: { readonly limit: number; readonly branch?: string; readonly since?: string },
   ) {
     const branch = opts.branch ? `&branch=${encodeURIComponent(opts.branch)}` : "";
-    const runs = yield* pages(
-      (p) =>
-        `${repoPath(repo)}/actions/runs?status=completed&per_page=${Math.min(PAGE, opts.limit)}&page=${p}${branch}`,
-      WorkflowRuns,
-      (x) => x.workflow_runs,
-      opts.limit,
-      "listRuns",
-      `${repo.owner}/${repo.repo}`,
-      runPages,
-    );
+    // GitHub's `created` filter takes dates; the day boundary rounds the window out, not in.
+    const sinceDay = opts.since?.slice(0, 10);
+    const created = (upToDay?: string) => {
+      const range = sinceDay
+        ? upToDay
+          ? `${sinceDay}..${upToDay}`
+          : `>=${sinceDay}`
+        : upToDay
+          ? `<=${upToDay}`
+          : undefined;
+      return range ? `&created=${encodeURIComponent(range)}` : "";
+    };
+    // GitHub pages no further than RUN_CAP results into one listing. Past it, the window
+    // closes at the oldest day seen and the walk goes on from there; the boundary day repeats.
+    const runs: Array<typeof WorkflowRun.Type> = [];
+    const ids = new Set<number>();
+    let upToDay: string | undefined;
+    while (runs.length < opts.limit) {
+      const chunk = yield* pages(
+        (p) =>
+          `${repoPath(repo)}/actions/runs?status=completed&per_page=${Math.min(PAGE, opts.limit)}&page=${p}${branch}${created(upToDay)}`,
+        WorkflowRuns,
+        (x) => x.workflow_runs,
+        Math.min(opts.limit - runs.length, RUN_CAP),
+        "listRuns",
+        `${repo.owner}/${repo.repo}`,
+        runPages,
+      );
+      for (const r of chunk) {
+        if (ids.has(r.id)) continue;
+        ids.add(r.id);
+        runs.push(r);
+      }
+      const oldest = chunk.at(-1)?.created_at.slice(0, 10);
+      if (chunk.length < RUN_CAP || oldest === undefined || oldest === upToDay) break;
+      upToDay = oldest;
+    }
     return runs.map((r): RunMeta => ({
       ...repo,
       runId: String(r.id),

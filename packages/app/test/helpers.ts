@@ -36,9 +36,12 @@ export const testConfig = (overrides: Partial<AppConfig.Interface> = {}): AppCon
 export const tmpDir = () => mkdtemp(join(tmpdir(), "tag-"));
 
 /** Full stack on a temp filesystem store and an in-memory index. */
-export const testLayer = async (sourceOverride?: ArtifactSource.Interface) => {
+export const testLayer = async (
+  sourceOverride?: ArtifactSource.Interface,
+  overrides: Partial<AppConfig.Interface> = {},
+) => {
   const dir = await tmpDir();
-  const config = Layer.succeed(AppConfig.Service, testConfig());
+  const config = Layer.succeed(AppConfig.Service, testConfig(overrides));
   const store = ArtifactStore.layerFs(join(dir, "store"));
   const source = sourceOverride
     ? Layer.succeed(ArtifactSource.Service, sourceOverride)

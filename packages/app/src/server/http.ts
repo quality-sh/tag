@@ -496,6 +496,10 @@ export const ApiRoutes = HttpRouter.use((router) =>
 
     yield* router.add("GET", "/api/ingest/status", () => Effect.map(ingest.status(), json));
 
+    yield* router.add("GET", "/api/repositories", () =>
+      Effect.map(results.repositories(), (rows) => json(rows)),
+    );
+
     yield* router.add("POST", "/api/ingest", () =>
       Effect.gen(function* () {
         const body = yield* HttpServerRequest.schemaBodyJson(IngestBody).pipe(
