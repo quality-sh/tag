@@ -1,5 +1,5 @@
 {
-  "name": "@quality-sh/verdict-schema",
+  "name": "@quality-sh/tag-schema",
   "version": "0.0.1",
   "type": "module",
   "exports": {

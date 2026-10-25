@@ -54,7 +54,7 @@ export interface Interface {
   readonly openArtifact: (artifact: ArtifactMeta) => Effect.Effect<Uint8Array, SourceError>;
 }
 
-export class Service extends Context.Service<Service, Interface>()("@verdict/ArtifactSource") {}
+export class Service extends Context.Service<Service, Interface>()("@tag/ArtifactSource") {}
 
 // ---------------------------------------------------------------------------
 // Fixtures: <dir>/<owner>/<repo>/<runId>/run.json + one subdirectory per artifact,

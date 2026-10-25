@@ -3,6 +3,8 @@ import {
   assign,
   chipOf,
   computeGroups,
+  computeOverview,
+  defaultBranchOf,
   formatQuery,
   indexValues,
   parseQuery,
@@ -145,6 +147,16 @@ describe("computeGroups", () => {
     expect(rows.map((r) => r.key).sort()).toEqual(["playwright", "pytest"]);
     expect(rows.find((r) => r.key === "playwright")!.runs).toBe(1);
   });
+  test("org scopes by owner; owner is its alias", () => {
+    const owner = reports[0]!.owner;
+    const mine = computeGroups({ reports, refs, by: "repo", filters: parseQuery(`org:${owner}`) });
+    expect(mine.length).toBeGreaterThan(0);
+    expect(mine.every((r) => r.owner === owner)).toBe(true);
+    expect(parseQuery("owner:acme")).toEqual(parseQuery("org:acme"));
+    expect(computeGroups({ reports, refs, by: "repo", filters: parseQuery("org:nobody") })).toEqual(
+      [],
+    );
+  });
 });
 
 describe("suggest", () => {
@@ -155,5 +167,51 @@ describe("suggest", () => {
     expect(s.at(-1)).toMatchObject({ kind: "text", value: "env" });
     const v = suggest(idx, "release:v");
     expect(v.map((x) => x.token)).toEqual(["release:v1", "release:v2"]);
+  });
+});
+
+describe("defaultBranchOf", () => {
+  const repo = { owner: "acme", repo: "widgets" };
+  const pr = (base: string): Ref => ({
+    kind: "pull_request",
+    key: "#1",
+    ...repo,
+    commit: null,
+    branch: "feat/x",
+    timestamp: "2026-10-01T00:00:00Z",
+    title: null,
+    url: null,
+    meta: { base },
+  });
+  test("a conventional name wins, then the pull requests' base, then the busiest branch", () => {
+    expect(defaultBranchOf([{ branch: "feat/x" }, { branch: "main" }], [], repo)).toBe("main");
+    expect(defaultBranchOf([{ branch: "feat/x" }], [pr("trunk-2")], repo)).toBe("trunk-2");
+    expect(defaultBranchOf([{ branch: "a" }, { branch: "b" }, { branch: "b" }], [], repo)).toBe(
+      "b",
+    );
+    expect(defaultBranchOf([], [], repo)).toBeNull();
+  });
+});
+
+describe("computeOverview", () => {
+  test("one entry per repository: main, latest release, open pull requests, recent runs", () => {
+    const [w, ...rest] = computeOverview({ reports, refs });
+    expect(rest).toEqual([]);
+    expect(w).toMatchObject({
+      owner: "acme",
+      repo: "widgets",
+      defaultBranch: "main",
+      runs: 4,
+      pullRequests: { open: 1, failing: 1 },
+    });
+    expect(w!.main.run?.runId).toBe("4");
+    expect(w!.main.vsPrevious).toBeCloseTo(0, 5);
+    expect(w!.release?.key).toBe("v2");
+    expect(w!.recent.map((r) => [r.run.runId, r.release, r.pullRequest])).toEqual([
+      ["4", null, null],
+      ["3", null, "#7"],
+      ["2", "v2", null],
+      ["1", "v1", null],
+    ]);
   });
 });

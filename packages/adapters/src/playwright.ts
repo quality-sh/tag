@@ -6,8 +6,15 @@ import {
   type CtrfTest,
   type CtrfAttachment,
   type Mutable,
-} from "@quality-sh/verdict-schema";
-import { basename, environmentFrom, type Adapter, type AdapterInput } from "./types.ts";
+} from "@quality-sh/tag-schema";
+import {
+  basename,
+  environmentFrom,
+  isJson,
+  parseJson,
+  type Adapter,
+  type AdapterInput,
+} from "./types.ts";
 
 interface PwAttachment {
   name: string;
@@ -68,11 +75,6 @@ interface PwReport {
     skipped?: number;
   };
 }
-
-const isCandidate = (p: string) => {
-  const b = basename(p);
-  return b === "results.json" || b === "playwright-results.json" || b === "report.json";
-};
 
 function looksLikePlaywright(o: unknown): o is PwReport {
   return !!o && typeof o === "object" && Array.isArray((o as PwReport).suites) && "config" in o;
@@ -206,7 +208,7 @@ export function convertPlaywright(
     runId: ctx.runId,
     // The run's time when CI gave one; the report's own start time otherwise.
     timestamp: ctx.timestamp ?? new Date(startMs).toISOString(),
-    generatedBy: "verdict-adapter-playwright",
+    generatedBy: "tag-adapter-playwright",
     results: {
       tool: {
         name: "playwright",
@@ -227,7 +229,7 @@ export function convertPlaywright(
       tests,
       environment: environmentFrom(ctx),
       extra: {
-        "verdict.artifacts": artifacts,
+        "tag.artifacts": artifacts,
         ...(reportDir ? { "playwright.reportDir": reportDir } : {}),
       },
     },
@@ -254,12 +256,12 @@ export function findPlaywrightHtmlIndex(paths: string[]): string | undefined {
 export const playwrightAdapter: Adapter = {
   name: "playwright",
   version: "0.1.0",
-  detect: (paths) => paths.some(isCandidate),
+  detect: (paths) => paths.some(isJson),
   async parse({ files, context }) {
     const out: CtrfReport[] = [];
     const html = findPlaywrightHtmlIndex(files.map((f) => f.path));
-    for (const f of files.filter((f) => isCandidate(f.path))) {
-      const parsed: unknown = JSON.parse(await f.text());
+    for (const f of files.filter((f) => isJson(f.path))) {
+      const parsed = parseJson(await f.text());
       if (!looksLikePlaywright(parsed)) continue;
       out.push(convertPlaywright(parsed, context, f.path, html));
     }

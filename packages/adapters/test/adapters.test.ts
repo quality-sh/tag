@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { validateReport, metricsOf, artifactsOf } from "@quality-sh/verdict-schema";
+import { validateReport, metricsOf, artifactsOf } from "@quality-sh/tag-schema";
 import { runAdapters, deepevalAdapter, junitAdapter, adapters } from "../src/index.ts";
 import { filesFromDir, ctx, FIXTURES } from "./helpers.ts";
 
@@ -45,6 +45,20 @@ describe("junit adapter", () => {
     expect(failed?.suite).toEqual(["pytest", "tests", "test_inventory"]);
     expect(failed?.trace).toContain("AssertionError");
     expect(failed?.filePath).toBe("tests/test_inventory.py");
+  });
+  test("picks junit by content, whatever the file is called", async () => {
+    const files = [
+      {
+        path: "playwright.xml",
+        size: 10,
+        text: async () =>
+          '<testsuites tests="1"><testsuite name="s" tests="1"><testcase name="t" classname="s" time="0.1"/></testsuite></testsuites>',
+        bytes: async () => new Uint8Array(),
+      },
+    ];
+    const runs = await runAdapters({ files, context: ctx("x") });
+    expect(runs.map((r) => r.adapter)).toEqual(["junit"]);
+    expect(runs[0]!.reports[0]!.results.summary.tests).toBe(1);
   });
   test("ignores non-junit xml", async () => {
     const files = [

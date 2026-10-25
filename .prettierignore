@@ -7,7 +7,7 @@
 packages/app/dist/
 # Recorded CI artifacts the adapters read
 fixtures/
-# Local data, S3 cache and SQLite
-.data/
+# Local data, S3 cache and SQLite, of any instance (.data, .data-gh)
+.data*/
 # Test coverage reports
 coverage/

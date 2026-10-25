@@ -3,8 +3,8 @@ services:
     image: rustfs/rustfs:latest
     ports: ["9000:9000", "9001:9001"]
     environment:
-      RUSTFS_ACCESS_KEY: verdict
-      RUSTFS_SECRET_KEY: verdictdev
+      RUSTFS_ACCESS_KEY: tag
+      RUSTFS_SECRET_KEY: tagdev
       RUSTFS_CONSOLE_ENABLE: "true"
     volumes: ["rustfs-data:/data"]
   # Creates the bucket once the server is up.
@@ -12,15 +12,15 @@ services:
     image: amazon/aws-cli:latest
     depends_on: [rustfs]
     environment:
-      AWS_ACCESS_KEY_ID: verdict
-      AWS_SECRET_ACCESS_KEY: verdictdev
+      AWS_ACCESS_KEY_ID: tag
+      AWS_SECRET_ACCESS_KEY: tagdev
       AWS_EC2_METADATA_DISABLED: "true"
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >
         for i in $(seq 1 30); do
-          aws --endpoint-url http://rustfs:9000 --region us-east-1 s3api head-bucket --bucket verdict 2>/dev/null && exit 0;
-          aws --endpoint-url http://rustfs:9000 --region us-east-1 s3api create-bucket --bucket verdict 2>/dev/null && exit 0;
+          aws --endpoint-url http://rustfs:9000 --region us-east-1 s3api head-bucket --bucket tag 2>/dev/null && exit 0;
+          aws --endpoint-url http://rustfs:9000 --region us-east-1 s3api create-bucket --bucket tag 2>/dev/null && exit 0;
           sleep 1;
         done; echo "bucket init failed"; exit 1
 

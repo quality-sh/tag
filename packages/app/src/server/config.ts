@@ -8,10 +8,20 @@ export interface S3Config {
   readonly secretAccessKey: Redacted.Redacted<string>;
 }
 
+/** A GitHub App installation, or a plain token (fine-grained PAT or GITHUB_TOKEN) for one-off use. */
+export type GithubAuth =
+  | { readonly _tag: "token"; readonly token: Redacted.Redacted<string> }
+  | {
+      readonly _tag: "app";
+      readonly appId: string;
+      readonly privateKey: Redacted.Redacted<string>;
+      readonly installationId: string;
+    };
+
 export interface GithubConfig {
-  readonly appId: string;
-  readonly privateKey: Redacted.Redacted<string>;
-  readonly installationId: string;
+  readonly auth: GithubAuth;
+  readonly apiUrl: string;
+  /** Empty means every repository the installation can see. */
   readonly repos: ReadonlyArray<{ readonly owner: string; readonly repo: string }>;
 }
 
@@ -28,9 +38,11 @@ export interface Interface {
   readonly artifactPort: number;
   /** Default policy for large artifacts: copy into the store at ingest, or only when first viewed. */
   readonly copyPolicy: "copy" | "on-view";
+  /** Cached artifact files older than this leave the store; 0 keeps them forever. Reports stay. */
+  readonly artifactRetentionDays: number;
 }
 
-export class Service extends Context.Service<Service, Interface>()("@verdict/AppConfig") {}
+export class Service extends Context.Service<Service, Interface>()("@tag/AppConfig") {}
 
 export const layer = Layer.effect(
   Service,
@@ -48,18 +60,28 @@ export const layer = Layer.effect(
 
     const dataDir = yield* Config.String("DATA_DIR").pipe(Config.withDefault(".data"));
     const sqlitePath = yield* Config.String("SQLITE_PATH").pipe(
-      Config.withDefault(`${dataDir}/verdict.sqlite`),
+      Config.withDefault(`${dataDir}/tag.sqlite`),
     );
-    const sourceRaw = yield* Config.String("SOURCE").pipe(Config.withDefault("fixtures"));
-    const source = sourceRaw === "github" ? "github" : "fixtures";
     const fixturesDir = yield* Config.String("FIXTURES_DIR").pipe(Config.withDefault("fixtures"));
 
     const appId = yield* Config.option(Config.String("GITHUB_APP_ID"));
-    const github: Option.Option<GithubConfig> = Option.isSome(appId)
+    const token = yield* Config.option(Config.Redacted("GITHUB_TOKEN"));
+    const auth: Option.Option<GithubAuth> = Option.isSome(appId)
       ? Option.some({
+          _tag: "app",
           appId: appId.value,
           privateKey: yield* Config.Redacted("GITHUB_APP_PRIVATE_KEY"),
           installationId: yield* Config.String("GITHUB_INSTALLATION_ID"),
+        })
+      : Option.isSome(token)
+        ? Option.some({ _tag: "token", token: token.value })
+        : Option.none();
+    const github: Option.Option<GithubConfig> = Option.isSome(auth)
+      ? Option.some({
+          auth: auth.value,
+          apiUrl: yield* Config.String("GITHUB_API_URL").pipe(
+            Config.withDefault("https://api.github.com"),
+          ),
           repos: (yield* Config.String("GITHUB_REPOS").pipe(Config.withDefault("")))
             .split(",")
             .map((s) => s.trim())
@@ -70,8 +92,16 @@ export const layer = Layer.effect(
             }),
         })
       : Option.none();
+    // GitHub credentials select the GitHub source unless SOURCE says otherwise.
+    const sourceRaw = yield* Config.String("SOURCE").pipe(Config.withDefault(""));
+    const source =
+      sourceRaw === "github" || sourceRaw === "fixtures"
+        ? sourceRaw
+        : Option.isSome(github)
+          ? "github"
+          : "fixtures";
 
-    const password = yield* Config.Redacted("VERDICT_PASSWORD").pipe(
+    const password = yield* Config.Redacted("TAG_PASSWORD").pipe(
       Config.withDefault(Redacted.make("")),
     );
     const sessionSecret = yield* Config.Redacted("SESSION_SECRET").pipe(
@@ -83,7 +113,12 @@ export const layer = Layer.effect(
       Config.withDefault("copy"),
     );
 
+    const artifactRetentionDays = yield* Config.Number("ARTIFACT_RETENTION_DAYS").pipe(
+      Config.withDefault(90),
+    );
+
     return Service.of({
+      artifactRetentionDays,
       s3,
       dataDir,
       sqlitePath,

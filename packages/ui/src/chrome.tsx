@@ -208,7 +208,7 @@ const page = stylex.create({
     rowGap: "1rem",
     columnGap: "2rem",
   },
-  headMain: { minWidth: 0, maxWidth: "48rem", flexGrow: 1, flexShrink: 1, flexBasis: "100%" },
+  headMain: { minWidth: 0, maxWidth: "48rem", flexGrow: 1, flexShrink: 1, flexBasis: "28rem" },
   h1: {
     marginTop: "0.35rem",
     fontFamily: fonts.display,
@@ -222,7 +222,14 @@ const page = stylex.create({
   },
   q: { marginTop: "0.7rem" },
   facts: { marginTop: "0.7rem" },
-  aside: { flexShrink: 0, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" },
+  aside: {
+    flexShrink: 0,
+    marginLeft: "auto",
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
   section: { paddingTop: "2rem" },
   sectionRule: {
     marginTop: "1.5rem",

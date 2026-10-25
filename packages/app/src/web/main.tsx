@@ -1,4 +1,4 @@
-import "@quality-sh/verdict-ui/global.css";
+import "@quality-sh/tag-ui/global.css";
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Cause, Option } from "effect";
@@ -16,7 +16,6 @@ import {
   Disclosure,
   Empty,
   Facts,
-  Fields,
   FigureCell,
   FigureGrid,
   Figures,
@@ -30,17 +29,14 @@ import {
   LoginShell,
   Mark,
   Message,
-  Meter,
   Page,
   PillInput,
   Plot,
-  Q,
   Row,
   Rows,
   Section,
   Space,
   Split,
-  Stack,
   Stats,
   Sub,
   Table,
@@ -57,10 +53,13 @@ import {
   plural,
   short,
   toneOf,
-} from "@quality-sh/verdict-ui";
-import { type ArtifactRow, type MetricRow, type ReportDetail, type RunRow } from "./client.ts";
+} from "@quality-sh/tag-ui";
+import { type ArtifactRow, type ReportDetail, type RunRow } from "./client.ts";
+import { DeepEval } from "./deepeval.tsx";
 import { Loaded, SignOut, segmentsOf } from "./common.tsx";
-import { CollectionsPage, GroupPage, HomePage } from "./home.tsx";
+import { CollectionsPage, GroupPage, ViewPage } from "./home.tsx";
+import { OverviewPage } from "./overview.tsx";
+import { ScopePage } from "./scope.tsx";
 import {
   embedAtom,
   historyAtom,
@@ -69,6 +68,7 @@ import {
   loginFn,
   openArtifactFn,
   parseRoute,
+  scopePath,
   reportAtom,
   routeAtom,
   sessionAtom,
@@ -83,9 +83,9 @@ function ReportPage({ reportId }: { reportId: string }) {
   return (
     <>
       <Topbar
-        wordmark="Verdict"
+        wordmark="TAG"
         crumbs={[
-          { label: "Home", href: href.home() },
+          { label: "Overview", href: href.overview() },
           { label: run ? `${run.owner}/${run.repo}` : "…" },
           { label: run?.runId ?? "…" },
           { label: run?.tool ?? "report" },
@@ -350,140 +350,10 @@ function EmbeddedArtifact() {
     onNone: () => null,
     onSome: (e) => (
       <Section eyebrow="Original report">
-        <Frame
-          title={e.title}
-          src={e.url}
-          meta="served from Verdict's artifact origin, sandboxed"
-        />
+        <Frame title={e.title} src={e.url} meta="served from TAG's artifact origin, sandboxed" />
       </Section>
     ),
   });
-}
-
-// ---------------------------------------------------------------------------
-// DeepEval
-
-function DeepEval({ d }: { d: ReportDetail }) {
-  const byTest = new Map<string, MetricRow[]>();
-  for (const m of d.metrics) byTest.set(m.testId, [...(byTest.get(m.testId) ?? []), m]);
-  const ctrf = new Map((d.report?.results.tests ?? []).map((t) => [t.testId ?? "", t]));
-  const extra = d.report?.results.extra as
-    | { deepeval?: { hyperparameters?: Record<string, unknown>; evaluationCost?: number } }
-    | undefined;
-  const hp = extra?.deepeval?.hyperparameters;
-  const names = [...new Set(d.metrics.map((m) => m.name))];
-  const averages = names.map((n) => {
-    const vals = d.metrics
-      .filter((m) => m.name === n && m.value !== null)
-      .map((m) => m.value as number);
-    const fails = d.metrics.filter((m) => m.name === n && m.passed === 0).length;
-    return {
-      name: n,
-      mean: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null,
-      fails,
-    };
-  });
-  const cases = [...d.tests].sort((a, b) =>
-    a.status === b.status ? 0 : a.status === "failed" ? -1 : 1,
-  );
-
-  return (
-    <>
-      <Section eyebrow="Metrics" count={plural(names.length, "metric")}>
-        <Figures
-          items={averages.map((a) => ({
-            key: a.name,
-            label: a.name,
-            value: a.mean === null ? "—" : a.mean.toFixed(2),
-            unit: "mean",
-            note: a.fails > 0 ? <Bad>{a.fails} below threshold</Bad> : "all above threshold",
-            tone: a.fails > 0 ? "failed" : "metric",
-          }))}
-        />
-        {hp && (
-          <Space top={12}>
-            <Facts>{Object.entries(hp).map(([k, v]) => `${k} ${String(v)}`)}</Facts>
-          </Space>
-        )}
-      </Section>
-      <Section eyebrow="Evaluation cases" count={cases.length}>
-        <Rows>
-          {cases.map((t) => {
-            const metrics = byTest.get(t.testId) ?? [];
-            const full = ctrf.get(t.testId);
-            const io = full?.extra?.["deepeval.io"] as
-              | {
-                  input?: string;
-                  actualOutput?: string;
-                  expectedOutput?: string;
-                  retrievalContext?: string[];
-                }
-              | undefined;
-            const md = full?.extra?.["deepeval.metricsData"] as
-              | Array<{ name: string; reason?: string; evaluationModel?: string; error?: string }>
-              | undefined;
-            const fields = io
-              ? [
-                  io.input ? { label: "Input", value: io.input } : null,
-                  io.actualOutput ? { label: "Actual output", value: io.actualOutput } : null,
-                  io.expectedOutput ? { label: "Expected output", value: io.expectedOutput } : null,
-                  io.retrievalContext?.length
-                    ? { label: "Retrieval context", value: io.retrievalContext.join("\n\n") }
-                    : null,
-                ].filter((f): f is { label: string; value: string } => f !== null)
-              : [];
-            return (
-              <Row
-                key={t.testId}
-                title={
-                  <Link ink href={href.test(d.run.owner, d.run.repo, t.testId)}>
-                    {t.name}
-                  </Link>
-                }
-                facts={
-                  <>
-                    <Mark tone={toneOf(t.status)} />
-                    <K>{fmtMs(t.duration)}</K>
-                  </>
-                }
-              >
-                <Stack gap={10}>
-                  {metrics.map((m) => {
-                    const reason = md?.find((x) => x.name === m.name);
-                    const failed = m.passed === 0;
-                    return (
-                      <div key={m.name}>
-                        <Meter
-                          name={m.name}
-                          value={m.value}
-                          threshold={m.threshold}
-                          comparator={m.comparator}
-                          passed={m.passed === null ? null : m.passed === 1}
-                        />
-                        {reason?.reason && (failed || metrics.length <= 3) && (
-                          <Space top={6}>
-                            <Q>{reason.reason}</Q>
-                          </Space>
-                        )}
-                        {reason?.error && <Message>{reason.error}</Message>}
-                      </div>
-                    );
-                  })}
-                </Stack>
-                {fields.length > 0 && (
-                  <Space top={14}>
-                    <Disclosure summary="input, output and context">
-                      <Fields items={fields} />
-                    </Disclosure>
-                  </Space>
-                )}
-              </Row>
-            );
-          })}
-        </Rows>
-      </Section>
-    </>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -495,9 +365,9 @@ function TestHistoryPage({ owner, repo, testId }: { owner: string; repo: string;
   return (
     <>
       <Topbar
-        wordmark="Verdict"
+        wordmark="TAG"
         crumbs={[
-          { label: "Home", href: href.home() },
+          { label: "Overview", href: href.overview() },
           { label: `${owner}/${repo}` },
           { label: latest?.name ?? "test" },
         ]}
@@ -660,10 +530,10 @@ function LoginPage() {
   const rejected = AsyncResult.isSuccess(login) && login.value === false;
   return (
     <>
-      <Topbar wordmark="Verdict" />
+      <Topbar wordmark="TAG" />
       <LoginShell
         eyebrow="Test results from CI, in one place"
-        title="Sign in to Verdict."
+        title="Sign in to TAG."
         lede="Enter the shared viewer password."
         onSubmit={() => runLogin(pw)}
         error={rejected ? "That password was not accepted." : undefined}
@@ -702,7 +572,7 @@ function App() {
   const session = useAtomValue(sessionAtom);
   if (!AsyncResult.isSuccess(session))
     return AsyncResult.isFailure(session) ? (
-      <Empty>Verdict is not reachable: {String(Cause.squash(session.cause))}</Empty>
+      <Empty>TAG is not reachable: {String(Cause.squash(session.cause))}</Empty>
     ) : null;
   const authed = session.value.authenticated || !session.value.authRequired;
   if (!authed) return <LoginPage />;
@@ -715,8 +585,19 @@ function App() {
       return <CollectionsPage />;
     case "group":
       return <GroupPage key={`${route.by}/${route.key}`} view={route} groupKey={route.key} />;
+    case "view":
+      return <ViewPage view={route} />;
+    case "scope":
+      return (
+        <ScopePage
+          key={scopePath(route.scope)}
+          scope={route.scope}
+          q={route.q}
+          range={route.range}
+        />
+      );
     default:
-      return <HomePage view={route} />;
+      return <OverviewPage range={route.range} />;
   }
 }
 

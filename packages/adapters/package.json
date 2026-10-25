@@ -1,12 +1,12 @@
 {
-  "name": "@quality-sh/verdict-adapters",
+  "name": "@quality-sh/tag-adapters",
   "version": "0.0.1",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@quality-sh/verdict-schema": "workspace:*",
+    "@quality-sh/tag-schema": "workspace:*",
     "fast-xml-parser": "^5.2.0"
   }
 }

@@ -8,6 +8,7 @@ import { Schema } from "effect";
 // Fields and the filter grammar
 
 export const FIELDS = [
+  "org",
   "repo",
   "branch",
   "commit",
@@ -33,6 +34,7 @@ const ALIASES: Record<string, Field> = {
   tool: "tool",
   tools: "tool",
   repository: "repo",
+  owner: "org",
   sha: "commit",
 };
 
@@ -40,6 +42,7 @@ export const FIELD_INFO: Record<
   Field,
   { readonly label: string; readonly kind: "enum" | "number" | "text"; readonly from: string }
 > = {
+  org: { label: "org", kind: "enum", from: "the run" },
   repo: { label: "repo", kind: "enum", from: "the run" },
   branch: { label: "branch", kind: "enum", from: "the run" },
   commit: { label: "commit", kind: "text", from: "the run" },
@@ -271,7 +274,6 @@ export const Collection = Schema.Struct({
   name: Schema.NonEmptyString,
   description: Schema.String,
   query: Schema.String,
-  groupBy: Schema.Literals(GROUP_BYS),
   createdAt: Schema.String,
 });
 export interface Collection extends Schema.Schema.Type<typeof Collection> {}
@@ -279,7 +281,6 @@ export const CollectionInput = Schema.Struct({
   name: Schema.NonEmptyString,
   description: Schema.optionalKey(Schema.String),
   query: Schema.String,
-  groupBy: Schema.Literals(GROUP_BYS),
 });
 
 // ---------------------------------------------------------------------------
@@ -471,6 +472,8 @@ function matchNumber(actual: number, f: Filter): boolean {
 
 export function matches(r: ReportLite, a: Assigned, f: Filter): boolean {
   switch (f.field) {
+    case "org":
+      return matchEnum([r.owner], f);
     case "repo":
       return matchEnum([`${r.owner}/${r.repo}`, r.repo], f);
     case "branch":
@@ -548,6 +551,27 @@ interface Bucket {
 }
 
 const DEFAULT_BRANCHES = ["main", "master", "trunk", "develop"];
+
+/**
+ * A repository's default branch: a conventional name seen in its runs, else the branch its
+ * pull requests target most, else the branch with the most runs. The source never says.
+ */
+export function defaultBranchOf(
+  runs: ReadonlyArray<{ readonly branch: string | null }>,
+  refs: ReadonlyArray<Ref>,
+  repo: { readonly owner: string; readonly repo: string },
+): string | null {
+  const seen = new Map<string, number>();
+  for (const r of runs) if (r.branch) seen.set(r.branch, (seen.get(r.branch) ?? 0) + 1);
+  const conventional = DEFAULT_BRANCHES.find((b) => seen.has(b));
+  if (conventional) return conventional;
+  const bases = new Map<string, number>();
+  for (const r of refs)
+    if (r.kind === "pull_request" && sameRepo(r, repo) && typeof r.meta.base === "string")
+      bases.set(r.meta.base, (bases.get(r.meta.base) ?? 0) + 1);
+  const top = (m: Map<string, number>) => [...m.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  return top(bases) ?? top(seen) ?? null;
+}
 
 export function keysOf(
   r: ReportLite,
@@ -644,11 +668,9 @@ export function computeGroups(input: GroupInput): GroupRow[] {
     const k = `${run.owner}/${run.repo}`;
     allRunsByRepo.set(k, [...(allRunsByRepo.get(k) ?? []), run]);
   }
-  const defaultBranchOf = (owner: string, repo: string) => {
-    const runs = allRunsByRepo.get(`${owner}/${repo}`) ?? [];
-    const branches = new Set(runs.map((r) => r.branch));
-    return input.defaultBranch ?? DEFAULT_BRANCHES.find((b) => branches.has(b)) ?? null;
-  };
+  const defaultBranchFor = (owner: string, repo: string) =>
+    input.defaultBranch ??
+    defaultBranchOf(allRunsByRepo.get(`${owner}/${repo}`) ?? [], input.refs, { owner, repo });
 
   const rows: GroupRow[] = [];
   const bucketRuns = new Map<string, RunSummary[]>();
@@ -694,7 +716,7 @@ export function computeGroups(input: GroupInput): GroupRow[] {
           ? typeof b.ref?.meta.base === "string"
             ? b.ref.meta.base
             : null
-          : defaultBranchOf(b.owner, b.repo);
+          : defaultBranchFor(b.owner, b.repo);
       if (base && base !== b.key) {
         baselineRun =
           (allRunsByRepo.get(`${b.owner}/${b.repo}`) ?? []).find((r) => r.branch === base) ?? null;
@@ -776,6 +798,7 @@ export function indexValues(
   };
   for (const r of reports) {
     const a = assign(r, refs);
+    bump("org", r.owner);
     bump("repo", `${r.owner}/${r.repo}`);
     bump("branch", r.branch);
     bump("tool", r.tool);
@@ -890,4 +913,118 @@ export function sinceOf(range: Range, now = new Date()): string | undefined {
   const days = { "1d": 1, "7d": 7, "30d": 30, "90d": 90, all: 0 }[range];
   if (!days) return undefined;
   return new Date(now.getTime() - days * 86_400_000).toISOString();
+}
+
+// ---------------------------------------------------------------------------
+// The overview: what state each repository is in, before any grouping
+
+export interface RecentRun {
+  readonly run: RunSummary;
+  readonly reports: ReadonlyArray<ReportLite>;
+  readonly release: string | null;
+  readonly pullRequest: string | null;
+}
+
+export interface RepoOverview {
+  readonly owner: string;
+  readonly repo: string;
+  readonly defaultBranch: string | null;
+  /** The latest run on the default branch, against the one before it. */
+  readonly main: {
+    readonly run: RunSummary | null;
+    readonly vsPrevious: number | null;
+    readonly trend: ReadonlyArray<TrendPoint>;
+  };
+  /** The newest release or tag with its verdict. */
+  readonly release: GroupRow | null;
+  readonly pullRequests: {
+    readonly open: number;
+    readonly failing: number;
+    readonly rows: ReadonlyArray<GroupRow>;
+  };
+  readonly flaky: number;
+  readonly runs: number;
+  readonly recent: ReadonlyArray<RecentRun>;
+}
+
+const isOpen = (r: Ref) => r.kind === "pull_request" && typeof r.meta.closedAt !== "string";
+
+export function computeOverview(input: {
+  readonly reports: ReadonlyArray<ReportLite>;
+  readonly refs: ReadonlyArray<Ref>;
+  readonly since?: string | undefined;
+  readonly recent?: number | undefined;
+}): RepoOverview[] {
+  const { refs } = input;
+  const recentN = input.recent ?? 8;
+  const inRange = input.since
+    ? input.reports.filter((r) => r.timestamp >= (input.since ?? ""))
+    : input.reports;
+  const byRepo = new Map<string, ReportLite[]>();
+  for (const r of inRange) {
+    const k = `${r.owner}/${r.repo}`;
+    byRepo.set(k, [...(byRepo.get(k) ?? []), r]);
+  }
+  const out: RepoOverview[] = [];
+  for (const reports of byRepo.values()) {
+    const first = reports[0];
+    if (!first) continue;
+    const { owner, repo } = first;
+    const runs = runsOf(reports);
+    const defaultBranch = defaultBranchOf(runs, refs, { owner, repo });
+    const mainRuns = runs.filter((r) => r.branch === defaultBranch);
+    const mainRun = mainRuns[0] ?? null;
+    const before = mainRuns[1];
+    const main = {
+      run: mainRun,
+      vsPrevious: mainRun && before ? pct(mainRun.passRate) - pct(before.passRate) : null,
+      trend: [...mainRuns]
+        .reverse()
+        .slice(-14)
+        .map((r) => ({
+          runId: r.runId,
+          timestamp: r.timestamp,
+          passRate: r.passRate,
+          failed: r.failed,
+        })),
+    };
+    const releases = computeGroups({ reports, refs, by: "release", filters: [] });
+    const release = releases.find((g) => g.ref !== null) ?? null;
+    const openKeys = new Set(
+      refs.filter((r) => isOpen(r) && r.owner === owner && r.repo === repo).map((r) => r.key),
+    );
+    const prRows = computeGroups({ reports, refs, by: "pull_request", filters: [] }).filter((g) =>
+      openKeys.has(g.key),
+    );
+    const byRun = new Map<string, ReportLite[]>();
+    for (const r of reports) byRun.set(r.runId, [...(byRun.get(r.runId) ?? []), r]);
+    const recent = runs.slice(0, recentN).map((run): RecentRun => {
+      const a = assign(run, refs);
+      return {
+        run,
+        reports: [...(byRun.get(run.runId) ?? [])].sort((x, y) => x.tool.localeCompare(y.tool)),
+        release: a.release === null ? null : a.release === "unreleased" ? null : a.release.key,
+        pullRequest: a.pullRequest?.key ?? null,
+      };
+    });
+    out.push({
+      owner,
+      repo,
+      defaultBranch,
+      main,
+      release,
+      pullRequests: {
+        open: openKeys.size,
+        failing: prRows.filter((g) => g.verdict === "failed").length,
+        rows: prRows,
+      },
+      flaky: mainRun?.flaky ?? 0,
+      runs: runs.length,
+      recent,
+    });
+  }
+  out.sort((a, b) =>
+    (b.recent[0]?.run.timestamp ?? "").localeCompare(a.recent[0]?.run.timestamp ?? ""),
+  );
+  return out;
 }

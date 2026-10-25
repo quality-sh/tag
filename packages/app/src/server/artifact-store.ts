@@ -31,7 +31,7 @@ export interface Interface {
   readonly remove: (key: string) => Effect.Effect<void, StoreError>;
 }
 
-export class Service extends Context.Service<Service, Interface>()("@verdict/ArtifactStore") {}
+export class Service extends Context.Service<Service, Interface>()("@tag/ArtifactStore") {}
 
 const MIME: Record<string, string> = {
   html: "text/html; charset=utf-8",

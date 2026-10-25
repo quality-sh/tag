@@ -6,10 +6,17 @@ import {
   withMetrics,
   type CtrfReport,
   type CtrfTest,
-  type VerdictMetric,
+  type TagMetric,
   type Mutable,
-} from "@quality-sh/verdict-schema";
-import { basename, environmentFrom, type Adapter, type AdapterInput } from "./types.ts";
+} from "@quality-sh/tag-schema";
+import {
+  basename,
+  environmentFrom,
+  isJson,
+  parseJson,
+  type Adapter,
+  type AdapterInput,
+} from "./types.ts";
 
 interface MetricData {
   name: string;
@@ -51,15 +58,6 @@ interface TestRun {
   datasetAlias?: string;
 }
 
-const isCandidate = (p: string) => {
-  const b = basename(p);
-  return (
-    b === ".latest_test_run.json" ||
-    b === ".latest_run_full.json" ||
-    /^test_run_\d{8}_\d{6}\.json$/.test(b)
-  );
-};
-
 function unwrap(parsed: unknown): TestRun | null {
   if (!parsed || typeof parsed !== "object") return null;
   const o = parsed as Record<string, unknown>;
@@ -71,8 +69,8 @@ function unwrap(parsed: unknown): TestRun | null {
 /** Metrics named like "hallucination" or "toxicity" pass when the score is at or below the threshold. */
 const LOWER_IS_BETTER = /hallucination|toxicity|bias/i;
 
-function toMetric(m: MetricData): VerdictMetric {
-  const out: Mutable<VerdictMetric> = {
+function toMetric(m: MetricData): TagMetric {
+  const out: Mutable<TagMetric> = {
     name: m.name,
     value: typeof m.score === "number" ? m.score : null,
   };
@@ -145,7 +143,7 @@ export function convertDeepEval(
     specVersion: CTRF_SPEC_VERSION,
     runId: ctx.runId,
     timestamp: new Date(startMs).toISOString(),
-    generatedBy: "verdict-adapter-deepeval",
+    generatedBy: "tag-adapter-deepeval",
     results: {
       tool: { name: "deepeval" },
       summary: {
@@ -171,7 +169,7 @@ export function convertDeepEval(
           testFailed: run.testFailed,
         },
         "deepeval.metricsScores": run.metricsScores ?? [],
-        "verdict.artifacts": [
+        "tag.artifacts": [
           {
             kind: "deepeval-json",
             name: "DeepEval results",
@@ -187,21 +185,20 @@ export function convertDeepEval(
 export const deepevalAdapter: Adapter = {
   name: "deepeval",
   version: "0.1.0",
-  detect: (paths) => paths.some(isCandidate),
+  detect: (paths) => paths.some(isJson),
   async parse({ files, context }) {
-    const out: CtrfReport[] = [];
+    // Every JSON file that holds a DeepEval run, whatever it is called.
+    const candidates: Array<{ path: string; run: TestRun }> = [];
+    for (const f of files.filter((f) => isJson(f.path))) {
+      const run = unwrap(parseJson(await f.text()));
+      if (run) candidates.push({ path: f.path, run });
+    }
     // Prefer the timestamped exports; fall back to the hidden latest file. Never emit both for the same run.
-    const candidates = files.filter((f) => isCandidate(f.path));
-    const timestamped = candidates.filter((f) => basename(f.path).startsWith("test_run_"));
+    const timestamped = candidates.filter((c) => basename(c.path).startsWith("test_run_"));
     const chosen = timestamped.length
       ? timestamped
-      : candidates.filter((f) => basename(f.path) === ".latest_test_run.json");
+      : candidates.filter((c) => basename(c.path) === ".latest_test_run.json");
     const fallback = chosen.length ? chosen : candidates.slice(0, 1);
-    for (const f of fallback) {
-      const run = unwrap(JSON.parse(await f.text()));
-      if (!run) continue;
-      out.push(convertDeepEval(run, context, f.path));
-    }
-    return out;
+    return fallback.map((c) => convertDeepEval(c.run, context, c.path));
   },
 };

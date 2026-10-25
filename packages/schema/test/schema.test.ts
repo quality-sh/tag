@@ -74,7 +74,7 @@ describe("metrics convention", () => {
     expect(metricsOf(t)).toEqual([{ name: "m", value: 0.5, threshold: 0.4, passed: true }]);
   });
   test("ignores malformed entries", () => {
-    const t = { ...minimal.results.tests[0]!, extra: { "verdict.metrics": [{ nope: 1 }] } };
+    const t = { ...minimal.results.tests[0]!, extra: { "tag.metrics": [{ nope: 1 }] } };
     expect(metricsOf(t)).toEqual([]);
   });
 });

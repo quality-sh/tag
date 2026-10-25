@@ -22,10 +22,11 @@ export const testConfig = (overrides: Partial<AppConfig.Interface> = {}): AppCon
   port: 0,
   artifactPort: 0,
   copyPolicy: "copy",
+  artifactRetentionDays: 90,
   ...overrides,
 });
 
-export const tmpDir = () => mkdtemp(join(tmpdir(), "verdict-"));
+export const tmpDir = () => mkdtemp(join(tmpdir(), "tag-"));
 
 /** Full stack on a temp filesystem store and an in-memory index. */
 export const testLayer = async () => {
@@ -49,10 +50,10 @@ export const localS3 = async (): Promise<AppConfig.S3Config | undefined> => {
     return undefined;
   }
   return {
-    bucket: "verdict",
+    bucket: "tag",
     endpoint: Option.some("http://localhost:9000"),
     region: "us-east-1",
-    accessKeyId: Redacted.make("verdict"),
-    secretAccessKey: Redacted.make("verdictdev"),
+    accessKeyId: Redacted.make("tag"),
+    secretAccessKey: Redacted.make("tagdev"),
   };
 };

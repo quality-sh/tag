@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "verdict",
+      "name": "tag",
       "devDependencies": {
         "@effect/language-service": "^0.87.5",
         "@eslint/js": "^10.0.1",
@@ -20,22 +20,22 @@
       },
     },
     "packages/adapters": {
-      "name": "@quality-sh/verdict-adapters",
+      "name": "@quality-sh/tag-adapters",
       "version": "0.0.1",
       "dependencies": {
-        "@quality-sh/verdict-schema": "workspace:*",
+        "@quality-sh/tag-schema": "workspace:*",
         "fast-xml-parser": "^5.2.0",
       },
     },
     "packages/app": {
-      "name": "@quality-sh/verdict-app",
+      "name": "@quality-sh/tag-app",
       "version": "0.0.1",
       "dependencies": {
         "@effect/atom-react": "4.0.6",
         "@effect/platform-bun": "^4.0.6",
-        "@quality-sh/verdict-adapters": "workspace:*",
-        "@quality-sh/verdict-schema": "workspace:*",
-        "@quality-sh/verdict-ui": "workspace:*",
+        "@quality-sh/tag-adapters": "workspace:*",
+        "@quality-sh/tag-schema": "workspace:*",
+        "@quality-sh/tag-ui": "workspace:*",
         "effect": "^4.0.6",
         "fflate": "^0.8.2",
         "react": "^19.1.0",
@@ -48,14 +48,14 @@
       },
     },
     "packages/schema": {
-      "name": "@quality-sh/verdict-schema",
+      "name": "@quality-sh/tag-schema",
       "version": "0.0.1",
       "dependencies": {
         "effect": "^4.0.6",
       },
     },
     "packages/ui": {
-      "name": "@quality-sh/verdict-ui",
+      "name": "@quality-sh/tag-ui",
       "version": "0.0.1",
       "dependencies": {
         "@fontsource/cormorant-garamond": "^5.3.0",
@@ -252,13 +252,13 @@
 
     "@oxc-resolver/binding-win32-x64-msvc": ["@oxc-resolver/binding-win32-x64-msvc@11.24.2", "", { "os": "win32", "cpu": "x64" }, "sha512-UqGPmo56KDfLlfXFAFIrNflHT8tFxWGEivWg3Zeyp4Uy2NlKN1FGPr6/BxcLGG3+kZ6Wp14g5Uj+n71boqZfiw=="],
 
-    "@quality-sh/verdict-adapters": ["@quality-sh/verdict-adapters@workspace:packages/adapters"],
+    "@quality-sh/tag-adapters": ["@quality-sh/tag-adapters@workspace:packages/adapters"],
 
-    "@quality-sh/verdict-app": ["@quality-sh/verdict-app@workspace:packages/app"],
+    "@quality-sh/tag-app": ["@quality-sh/tag-app@workspace:packages/app"],
 
-    "@quality-sh/verdict-schema": ["@quality-sh/verdict-schema@workspace:packages/schema"],
+    "@quality-sh/tag-schema": ["@quality-sh/tag-schema@workspace:packages/schema"],
 
-    "@quality-sh/verdict-ui": ["@quality-sh/verdict-ui@workspace:packages/ui"],
+    "@quality-sh/tag-ui": ["@quality-sh/tag-ui@workspace:packages/ui"],
 
     "@rolldown/binding-android-arm-eabi": ["@rolldown/binding-android-arm-eabi@1.2.15", "", { "os": "android", "cpu": "arm" }, "sha512-aLcgK9gIJ3YRvrrtfSBbRa27F5WrpiTaPulnFpsHPxpUHgFlSgnU4854MHwoRGEBhfRJDWCS2WQ7lIjskE9Olw=="],
 

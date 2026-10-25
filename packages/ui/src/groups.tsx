@@ -279,7 +279,7 @@ const rail = stylex.create({
     flexGrow: 0,
     flexShrink: 0,
     flexBasis: 220,
-    paddingTop: 24,
+    paddingTop: 40,
     paddingBottom: 24,
     paddingLeft: 32,
     paddingRight: 20,
@@ -295,7 +295,7 @@ const rail = stylex.create({
     flexShrink: 1,
     flexBasis: "720px",
     minWidth: 0,
-    paddingTop: 24,
+    paddingTop: 0,
     paddingBottom: 48,
     paddingLeft: 32,
     paddingRight: 32,
@@ -364,6 +364,7 @@ export function RailItem({
   count,
   bad,
   action,
+  onClick,
   children,
 }: {
   href: string;
@@ -372,11 +373,14 @@ export function RailItem({
   bad?: boolean;
   /** Gold: the item does something (new collection) rather than selects a view. */
   action?: boolean;
+  /** An in-page jump: the handler scrolls, the href stays for the context menu. */
+  onClick?: ((e: React.MouseEvent<HTMLAnchorElement>) => void) | undefined;
   children: ReactNode;
 }) {
   return (
     <a
       href={href}
+      onClick={onClick}
       aria-current={on ? "page" : undefined}
       {...stylex.props(rail.item, on && rail.itemOn, action && rail.itemAction)}
     >

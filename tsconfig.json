@@ -12,10 +12,10 @@
     "noEmit": true,
     "types": ["bun"],
     "paths": {
-      "@quality-sh/verdict-schema": ["./packages/schema/src/index.ts"],
-      "@quality-sh/verdict-adapters": ["./packages/adapters/src/index.ts"],
-      "@quality-sh/verdict-ui": ["./packages/ui/src/index.ts"],
-      "@quality-sh/verdict-ui/global.css": ["./packages/ui/src/global.css"]
+      "@quality-sh/tag-schema": ["./packages/schema/src/index.ts"],
+      "@quality-sh/tag-adapters": ["./packages/adapters/src/index.ts"],
+      "@quality-sh/tag-ui": ["./packages/ui/src/index.ts"],
+      "@quality-sh/tag-ui/global.css": ["./packages/ui/src/global.css"]
     },
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "plugins": [

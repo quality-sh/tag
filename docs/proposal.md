@@ -1,6 +1,6 @@
-# Verdict: smallest practical implementation
+# TAG: smallest practical implementation
 
-Repository: `github.com/quality-sh/verdict`. npm scope: `@quality-sh`. Both free as of today.
+Repository: `github.com/quality-sh/tag`. npm scope: `@quality-sh`. Both free as of today.
 
 Date: 2026-10-23. Versions checked against npm the same day.
 
@@ -51,7 +51,7 @@ Risks:
 - The 36 shadcn components are a web-app kit, not a reporting kit. You will write your own catalog of about eight components: Heading, Text, MetricTile, StatRow, Table, LineChart, BarChart, Section.
 - The PDF renderer cannot reuse chart components without an SVG path. Defer.
 
-Verdict: suitable. Build plain React first, extract to a catalog on day 2 afternoon in a two-hour box. If it slips, it is the first follow-up.
+TAG: suitable. Build plain React first, extract to a catalog on day 2 afternoon in a two-hour box. If it slips, it is the first follow-up.
 
 ### DuckDB
 
@@ -78,7 +78,7 @@ Use CTRF 0.2.0 as published. Do not fork it. Add two namespaced conventions insi
 - `results.tests[]`: `name, status (passed|failed|skipped|pending|other), duration, testId, suite[], filePath, line, message, trace, retries, flaky, tags, labels, parameters, attachments[] { name, contentType, path }, steps[], extra`.
 - Unknown fields are forbidden outside `extra`, so validation with the `ctrf` SDK stays strict.
 
-### Convention 1: `extra["verdict.metrics"]` on a test
+### Convention 1: `extra["tag.metrics"]` on a test
 
 Framework-agnostic numeric metrics so trends work for any adapter, not just DeepEval.
 
@@ -94,7 +94,7 @@ Framework-agnostic numeric metrics so trends work for any adapter, not just Deep
 }
 ```
 
-### Convention 2: `extra["verdict.artifacts"]` on `results`
+### Convention 2: `extra["tag.artifacts"]` on `results`
 
 References to original artifacts the dashboard should link or embed.
 
@@ -114,7 +114,7 @@ Source: `.deepeval/.latest_test_run.json` (`{ "testRunData": TestRun }`) or a `t
 | `testCases[].name` | `tests[].name` |
 | `testCases[].success` | `status: passed` / `failed` |
 | `testCases[].runDuration` (s) | `duration` (ms) |
-| `testCases[].metricsData[]` `{ name, score, threshold, success, reason, evaluationModel, error }` | `extra["verdict.metrics"][]` and the full array under `extra["deepeval.metricsData"]` |
+| `testCases[].metricsData[]` `{ name, score, threshold, success, reason, evaluationModel, error }` | `extra["tag.metrics"][]` and the full array under `extra["deepeval.metricsData"]` |
 | `testCases[].input / actualOutput / expectedOutput / retrievalContext` | `extra["deepeval.io"]` |
 | `testCases[].tags` | `tags` |
 | `hyperparameters`, `evaluationCost`, `datasetAlias` | `results.extra["deepeval"]` |
@@ -133,7 +133,7 @@ The bucket is the store of record. SQLite is a derived index that can be dropped
 - Bucket `reports/<owner>/<repo>/<reportId>.ctrf.json`: the validated report, as received. Immutable.
 - SQLite `runs`: one row per report. `report_id, run_id, owner, repo, tool, branch, commit, build_url, timestamp, tests, passed, failed, skipped, flaky, duration, artifact_id`.
 - SQLite `tests`: one row per test per report. `report_id, test_id, name, status, duration, file_path, suite, flaky, message`.
-- SQLite `metrics`: one row per `verdict.metrics` entry. `report_id, test_id, name, value, threshold, passed`.
+- SQLite `metrics`: one row per `tag.metrics` entry. `report_id, test_id, name, value, threshold, passed`.
 - SQLite `artifacts`: `artifact_id, owner, repo, run_id, name, size, github_expires_at, cached_at, state (listed|cached|expired)`.
 
 Idempotency: the key is `reportId` when present, else `sha1(runId + tool.name + shardId)`. An ingest of a seen key is a no-op. On boot, if the SQLite file is missing, list `reports/` and re-index.
@@ -158,7 +158,7 @@ export interface FileRef {
 export interface Adapter {
   name: string;                     // "deepeval"
   version: string;
-  detect(paths: string[]): boolean; // cheap: look at file names only
+  detect(paths: string[]): boolean; // cheap: could any file hold this format? parse() decides by content
   parse(input: AdapterInput): Promise<CtrfReport>;
 }
 ```
@@ -260,11 +260,11 @@ Permissions: Actions read, Metadata read. Optional subscription: `workflow_run`.
 One Bun workspace, three packages. Fewer would mix Effect into adapters; more is premature.
 
 ```
-verdict/
-  package.json                # bun workspaces, scripts; packages publish as @quality-sh/verdict-schema, -adapters, -app
+tag/
+  package.json                # bun workspaces, scripts; packages publish as @quality-sh/tag-schema, -adapters, -app
   bunfig.toml
   packages/
-    schema/                   # CTRF re-export, the two `verdict.*` conventions, Zod schemas, testId helper. No Effect.
+    schema/                   # CTRF re-export, the two `tag.*` conventions, Zod schemas, testId helper. No Effect.
       src/index.ts
       docs/schema.md          # the public contract
     adapters/                 # pure functions. One file per adapter + fixture tests.
@@ -302,7 +302,7 @@ Each step ends with something runnable. Order is a vertical slice first, GitHub 
 |---|---|---|---|
 | 1 | 0.5 | Workspace, three packages, `bun test`, CI | `bun test` green on an empty suite. |
 | 2 | 0.5 | Fixtures: one real DeepEval `.latest_test_run.json`, one real `playwright-report/` plus `ctrf` JSON, one JUnit XML | Files committed. |
-| 3 | 1 | `schema`: re-export `ctrf` types, Zod for `verdict.metrics` and `verdict.artifacts`, `testId()` | Unit tests. |
+| 3 | 1 | `schema`: re-export `ctrf` types, Zod for `tag.metrics` and `tag.artifacts`, `testId()` | Unit tests. |
 | 4 | 2 | `adapters`: `ctrf` (identity+validate), `deepeval`, `junit`, `playwright` JSON fallback | Each fixture parses to a valid CTRF report; snapshot tests. |
 | 5 | 1.5 | `S3Store` against local MinIO (docker compose), `FsStore` for tests, `FixtureSource`, unzip with zip-slip guard | Ingest from fixtures writes `reports/` and `artifacts/` to MinIO. |
 | 6 | 1 | `SqliteResultStore`: schema, ingest, listRuns, getReport, testHistory, rebuild from bucket | Tests; idempotent re-ingest; delete the db file and it rebuilds. |
@@ -363,9 +363,13 @@ Day 1 is built and verified end to end on fixtures. Where the build departed fro
 - **Effect atoms for client state.** `effect/reactivity/Atom` with `@effect/atom-react`: the API is a `Context.Service` behind `Atom.runtime`, each page reads `Atom.family` atoms, mutations are `runtime.fn` with reactivity keys, so a login or an ingest refreshes exactly the atoms that depend on it.
 - **Hyperstition's rules.** ESLint with the shared `effect` and `architecture` rule packs, Prettier at 100 columns, knip, the Effect language-service diagnostics, `bun audit`, changed-line coverage at 80 %, and the same CI matrix. `bun run check` is green.
 
-- **Groupings, not a runs list, as the home page.** Runs are grouped by a field and filtered by a query, in a time range. The group-bys are release (GitHub releases and tags: the verdict is the run at the tagged commit, the trend is every run since the previous tag, runs on the target branch after the last tag are "unreleased"), branch (compared with the default branch), pull request (compared with its base), environment (CTRF `testEnvironment`), tag (`verdict.tags` in `results.extra`, set at upload), tool, workflow (CTRF `buildName`), repository, day and run. The model is one pure module, `packages/app/src/grouping.ts`, shared by the server and the web app; `computeGroups` runs over the whole index on each request, which is fine until the index is far larger than a year of a busy org's runs.
+- **Groupings, not a runs list, as the home page.** Runs are grouped by a field and filtered by a query, in a time range. The group-bys are release (GitHub releases and tags: the verdict is the run at the tagged commit, the trend is every run since the previous tag, runs on the target branch after the last tag are "unreleased"), branch (compared with the default branch), pull request (compared with its base), environment (CTRF `testEnvironment`), tag (`tag.tags` in `results.extra`, set at upload), tool, workflow (CTRF `buildName`), repository, day and run. The model is one pure module, `packages/app/src/grouping.ts`, shared by the server and the web app; `computeGroups` runs over the whole index on each request, which is fine until the index is far larger than a year of a busy org's runs.
 - **Search as filter.** The query grammar is `field:value`, `field:a,b`, `-field:value`, `field:>n`, and bare words for text; it lives in the URL (`#/g/release?q=repo:acme/widgets failed:>0`). The bar suggests fields, then values with counts, from `GET /api/fields`. Applied filters show as chips at the right of the bar.
-- **Collections are saved views.** A collection is a name, a description, a query and a group-by, stored in SQLite and created from the collections page or `POST /api/collections`. The page shows the YAML equivalent for a future `.verdict/collections.yaml` in the client repository. Refs (releases, tags, pull requests, deployments) come from the artifact source; the fixtures source reads `fixtures/<owner>/<repo>/refs.json`, the GitHub source will read the GitHub API.
+- **Scopes, not views, are what you open.** A page is about an org (`#/org/acme`), a repository (`#/r/acme/widgets`) or a collection (`#/c/payments`). Each scope page has the same shape: the state of every repository in it (the overview's strip and recent runs), the filter bar, then every view as a section in reading order (releases, branches, pull requests, environments, tags, tools, workflows, days), each fetched from `GET /api/groups` when it scrolls within a screen of the viewport and showing its newest eight rows with a link to the full table. The rail lists orgs with their repositories, the collections, and the sections of the page. A scope is a query prefix (`org:acme`, `repo:acme/widgets`) or, for a collection, its saved query, which the server prepends when a request names the collection by `c`. The full-table view pages (`#/g/:by`) and the group pages stay as the drill-in.
+- **Collections are saved queries.** A collection is a name, a description and a query, stored in SQLite and created from the collections page or `POST /api/collections`. It no longer carries a group-by: every view is on its page. Refs (releases, tags, pull requests, deployments) come from the artifact source; the fixtures source reads `fixtures/<owner>/<repo>/refs.json`, the GitHub source reads the GitHub API.
 - **Reports take the run's time.** Every adapter stamps a report with the CI run's timestamp when the source knows it, so the reports of one run agree on when it ran and land in the same release and day. The tool's own start and stop stay in `summary`.
 
-Still to do (day 2): the GitHub App artifact source (runs and refs), retention sweeps, the JSON Render spike, and tests over time on the group page.
+- **GitHub without Octokit.** `GitHubSource` (`packages/app/src/server/github-source.ts`) talks to the REST API through the Effect HttpClient: `retryTransient` for 429s and 5xx, every response decoded with a Schema at the boundary, `per_page=100` paging. Auth is a GitHub App (the App JWT is signed with `node:crypto`, the installation token is cached for 50 minutes with `Effect.cachedWithTTL`) or a plain `GITHUB_TOKEN`; `GITHUB_REPOS` lists repositories, and an App with no list takes every repository it is installed on. Workflow runs become `RunMeta` (the workflow name, `head_branch`, `head_sha`, `run_started_at`, the event as the tag `event:push`); the artifact zip is fetched by reading the 302 by hand so the token never crosses to the blob origin. Refs: releases (commit from the tags list, drafts skipped), tags without a release, pull requests (`#n`, head branch and sha, `base`, `author`, `closedAt`, `mergedAt`), and the newest deployment per environment. `SOURCE` defaults to `github` once either credential is set. Octokit would have added two packages for the same six calls.
+- **Retention is a sweep, not only a lifecycle rule.** `ARTIFACT_RETENTION_DAYS` (default 90, 0 off): on boot and every six hours, `Retention.sweep` removes the cached files of artifacts whose newest report is older than the window and sets the index row back to `listed` (or `expired` when the source has expired it too). Reports are never swept. A later view fetches the artifact again from the source when it still exists. `POST /api/retention/sweep` runs it by hand. A bucket lifecycle rule on `artifacts/` remains the cheap belt-and-braces for very large stores.
+- **Tests over time on the group page.** Below the strip, a `Plot` of the test count per run in the group, oldest first, with runs that had failures marked; the note says how the count moved since the first run in the range.
+- **JSON Render spike: built our own, did not adopt the package.** `packages/app/src/web/render.tsx` is a flat JSON spec (`root`, `elements` keyed by id, each with `type`, `props`, `children`, and `each` to repeat children over a list) over a nine-component catalog from `packages/ui` (section, figures, facts, rows, row, stack, meter, message, fields), validated with Effect Schema; props bind to page data with `{ "$": "path" }`. The DeepEval view of a report (`deepeval.tsx`) is now a static spec plus a data shaper, rendered through it; the hand-written React went away. Verdict on `@json-render`: the fit is real (flat spec, catalog, bindings) but the renderer we need is 150 lines, it already uses our components and our schema library, and the package is still at 0.21.x with weekly breaking releases. Revisit it when specs start coming from a model rather than from code.

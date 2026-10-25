@@ -1,4 +1,4 @@
-import type { CtrfReport } from "@quality-sh/verdict-schema";
+import type { CtrfReport } from "@quality-sh/tag-schema";
 
 /** A file inside an extracted artifact. Paths are relative, posix separators. */
 export interface FileRef {
@@ -25,6 +25,19 @@ export interface RunContext {
   environment?: string;
 }
 
+/** File-type checks: adapters pick files by content, so these look at the extension only. */
+export const isJson = (p: string) => p.toLowerCase().endsWith(".json");
+export const isXml = (p: string) => p.toLowerCase().endsWith(".xml");
+
+/** JSON that may not be JSON at all: undefined instead of a throw. */
+export function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
 export interface AdapterInput {
   files: FileRef[];
   context: RunContext;
@@ -37,7 +50,7 @@ export interface AdapterInput {
 export interface Adapter {
   name: string;
   version: string;
-  /** Cheap check on file names only. */
+  /** Cheap check on file names: could any of these hold this format? Content decides in parse(). */
   detect(paths: string[]): boolean;
   /** May return several reports (one artifact can hold several result files). */
   parse(input: AdapterInput): Promise<CtrfReport[]>;

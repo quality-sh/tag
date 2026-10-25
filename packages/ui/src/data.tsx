@@ -277,6 +277,8 @@ export interface Column<T> {
   readonly dim?: boolean;
   /** The one column that may wrap; the rest stay on one line. */
   readonly wrap?: boolean;
+  /** Leave the column out under this viewport width, so the table never scrolls sideways. */
+  readonly hideUnder?: 1280 | 1100 | 900;
 }
 
 export interface TableSection<T> {
@@ -299,9 +301,10 @@ const table = stylex.create({
     fontFamily: fonts.mono,
     fontSize: text.micro,
     fontWeight: 400,
-    letterSpacing: text.labelTracking,
+    letterSpacing: "0.22em",
     textTransform: "uppercase",
     color: tokens.mauve,
+    paddingLeft: { default: 12, ":first-child": 0 },
     paddingRight: 12,
     paddingBottom: 10,
     borderBottomWidth: 1,
@@ -312,6 +315,7 @@ const table = stylex.create({
   td: {
     paddingTop: 10,
     paddingBottom: 10,
+    paddingLeft: { default: 12, ":first-child": 0 },
     paddingRight: 12,
     borderBottomWidth: 1,
     borderBottomStyle: "solid",
@@ -320,7 +324,7 @@ const table = stylex.create({
   },
   right: {
     textAlign: "right",
-    paddingLeft: 16,
+    paddingLeft: 10,
     paddingRight: 0,
     fontVariantNumeric: "tabular-nums",
   },
@@ -328,6 +332,9 @@ const table = stylex.create({
   middle: { verticalAlign: "middle", whiteSpace: "nowrap" },
   wrapCell: { whiteSpace: "normal", minWidth: "16rem" },
   hover: { backgroundColor: { default: "transparent", ":hover": "rgba(224, 222, 244, 0.02)" } },
+  hide1280: { display: { default: "table-cell", "@media (max-width: 1280px)": "none" } },
+  hide1100: { display: { default: "table-cell", "@media (max-width: 1100px)": "none" } },
+  hide900: { display: { default: "table-cell", "@media (max-width: 900px)": "none" } },
   groupHead: {
     paddingTop: 22,
     paddingBottom: 8,
@@ -336,6 +343,12 @@ const table = stylex.create({
   },
   sub: { display: "block", color: tokens.muted, fontSize: text.micro },
 });
+
+const hideUnder = {
+  1280: table.hide1280,
+  1100: table.hide1100,
+  900: table.hide900,
+} as const;
 
 /**
  * One table. Pass `rows`, or `sections` to head groups of rows with an eyebrow
@@ -365,6 +378,7 @@ export function Table<T>({
               table.td,
               c.right && table.right,
               c.dim && table.dim,
+              c.hideUnder && hideUnder[c.hideUnder],
               middle && table.middle,
               middle && c.wrap && table.wrapCell,
             )}
@@ -380,7 +394,14 @@ export function Table<T>({
         <thead>
           <tr>
             {columns.map((c) => (
-              <th key={c.key} {...stylex.props(table.th, c.right && table.right)}>
+              <th
+                key={c.key}
+                {...stylex.props(
+                  table.th,
+                  c.right && table.right,
+                  c.hideUnder && hideUnder[c.hideUnder],
+                )}
+              >
                 {c.head}
               </th>
             ))}

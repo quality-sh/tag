@@ -1,10 +1,11 @@
 // The dashboard API and static web app. One Bun server on PORT.
 import { Effect, Layer, Option, Schema } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse, HttpStaticServer } from "effect/http";
-import { artifactsOf } from "@quality-sh/verdict-schema";
+import { artifactsOf } from "@quality-sh/tag-schema";
 import {
   CollectionInput,
   computeGroups,
+  computeOverview,
   indexValues,
   isGroupBy,
   matching,
@@ -16,12 +17,15 @@ import {
   type Collection,
   type GroupBy,
   type Range,
+  type Ref,
+  type ReportLite,
 } from "../grouping.ts";
 import { AppConfig } from "./config.ts";
 import { Auth, SESSION_COOKIE } from "./auth.ts";
 import { ResultStore } from "./result-store.ts";
 import { ArtifactStore } from "./artifact-store.ts";
 import { Ingest } from "./ingest.ts";
+import { Retention } from "./retention.ts";
 
 const json = (body: unknown, status = 200) => HttpServerResponse.jsonUnsafe(body, { status });
 const notFound = (what: string) => json({ error: `${what} not found` }, 404);
@@ -67,6 +71,40 @@ const slug = (name: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "") || "collection";
 
+/** Each collection with what it holds now: groups, runs and failing groups. */
+const collectionRows = (
+  list: ReadonlyArray<Collection>,
+  reports: ReadonlyArray<ReportLite>,
+  refs: ReadonlyArray<Ref>,
+  since: string | undefined,
+) =>
+  list.map((c) => {
+    const filters = parseQuery(c.query);
+    const runs = runsOf(matching({ reports, refs, filters, since }).kept);
+    return {
+      ...c,
+      runs: runs.length,
+      failing: runs.filter((r) => r.failed > 0).length,
+      repos: new Set(runs.map((r) => `${r.owner}/${r.repo}`)).size,
+    };
+  });
+
+/** The filters a request means: a collection's query (by `c`), then the request's own. */
+const filtersOf = (collections: ReadonlyArray<Collection>, c: string | null, q: string | null) => {
+  const scope = c ? collections.find((x) => x.id === c) : undefined;
+  return [...parseQuery(scope?.query ?? ""), ...parseQuery(q ?? "")];
+};
+
+const VIEW_COUNTS = [
+  "release",
+  "branch",
+  "pull_request",
+  "environment",
+  "tag",
+  "tool",
+  "workflow",
+] as const;
+
 const cookieOptions = (maxAgeSeconds: number) => ({
   httpOnly: true,
   sameSite: "lax" as const,
@@ -78,6 +116,7 @@ export const ApiRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
     const results = yield* ResultStore.Service;
     const ingest = yield* Ingest.Service;
+    const retention = yield* Retention.Service;
     const auth = yield* Auth.Service;
     const cfg = yield* AppConfig.Service;
 
@@ -148,22 +187,55 @@ export const ApiRoutes = HttpRouter.use((router) =>
       );
     });
 
-    /** The home page: runs grouped by a field, filtered by a query, inside a time range. */
+    /** The home page: what state each repository is in, then the collections. */
+    /** The overview, or a scope of it: every repository the filters leave, with its state. */
+    yield* router.add("GET", "/api/overview", (req) =>
+      Effect.gen(function* () {
+        const q = query(req);
+        const range = rangeOf(q.get("range"));
+        const since = sinceOf(range);
+        const all = yield* results.reports({ since });
+        const refs = yield* results.refs();
+        const collections = yield* results.collections();
+        const filters = filtersOf(collections, q.get("c"), q.get("q"));
+        const reports = filters.length
+          ? matching({ reports: all, refs, filters, since }).kept
+          : all;
+        const counts = Object.fromEntries(
+          VIEW_COUNTS.map((g) => [
+            g,
+            computeGroups({ reports, refs, by: g, filters: [], since }).length,
+          ]),
+        );
+        return json({
+          range,
+          query: q.get("q") ?? "",
+          repos: computeOverview({ reports, refs, since }),
+          collections: collectionRows(collections, all, refs, since),
+          counts: { ...counts, run: runsOf(reports).length },
+          repoList: yield* results.repos(),
+        });
+      }),
+    );
+
+    /** A view: runs grouped by a field, filtered by a query, inside a time range. */
     yield* router.add("GET", "/api/groups", (req) =>
       Effect.gen(function* () {
         const q = query(req);
         const by = groupByOf(q.get("by"));
         const range = rangeOf(q.get("range"));
-        const filters = parseQuery(q.get("q") ?? "");
         const since = sinceOf(range);
         const reports = yield* results.reports({ since });
         const refs = yield* results.refs();
+        const collections = yield* results.collections();
+        const filters = filtersOf(collections, q.get("c"), q.get("q"));
         const rows = computeGroups({ reports, refs, by, filters, since });
         const latest = rows.flatMap((g) => (g.latest ? [g.latest] : []));
         const counts = Object.fromEntries(
-          (
-            ["release", "branch", "pull_request", "environment", "tag", "tool", "workflow"] as const
-          ).map((g) => [g, computeGroups({ reports, refs, by: g, filters: [], since }).length]),
+          VIEW_COUNTS.map((g) => [
+            g,
+            computeGroups({ reports, refs, by: g, filters: [], since }).length,
+          ]),
         );
         return json({
           by,
@@ -181,7 +253,7 @@ export const ApiRoutes = HttpRouter.use((router) =>
           },
           counts: { ...counts, run: runsOf(reports).length },
           repos: yield* results.repos(),
-          collections: yield* results.collections(),
+          collections,
         });
       }),
     );
@@ -194,10 +266,10 @@ export const ApiRoutes = HttpRouter.use((router) =>
         const key = params.key ?? "";
         const q = query(req);
         const range = rangeOf(q.get("range"), "90d");
-        const filters = parseQuery(q.get("q") ?? "");
         const since = sinceOf(range);
         const reports = yield* results.reports({ since });
         const refs = yield* results.refs();
+        const filters = filtersOf(yield* results.collections(), q.get("c"), q.get("q"));
         const rows = computeGroups({ reports, refs, by, filters, since, trendPoints: 60 });
         const group = rows.find((g) => g.key === key);
         if (!group) return notFound("group");
@@ -275,16 +347,21 @@ export const ApiRoutes = HttpRouter.use((router) =>
       }),
     );
 
-    yield* router.add(
-      "GET",
-      "/api/collections",
-      Effect.map(results.collections(), (c) => json(c)),
+    /** Every collection with what it holds now: groups, runs and failing groups over 30 days. */
+    yield* router.add("GET", "/api/collections", () =>
+      Effect.gen(function* () {
+        const list = yield* results.collections();
+        const since = sinceOf("30d");
+        const reports = yield* results.reports({ since });
+        const refs = yield* results.refs();
+        return json(collectionRows(list, reports, refs, since));
+      }),
     );
 
     yield* router.add("POST", "/api/collections", () =>
       Effect.gen(function* () {
         const body = yield* HttpServerRequest.schemaBodyJson(CollectionInput).pipe(
-          Effect.mapError(() => new BadRequest({ detail: "name, query and groupBy are required" })),
+          Effect.mapError(() => new BadRequest({ detail: "name and query are required" })),
         );
         const existing = yield* results.collections();
         let id = slug(body.name);
@@ -294,7 +371,6 @@ export const ApiRoutes = HttpRouter.use((router) =>
           name: body.name,
           description: body.description ?? "",
           query: body.query,
-          groupBy: body.groupBy,
           createdAt: new Date().toISOString(),
         };
         yield* results.saveCollection(c);
@@ -370,6 +446,8 @@ export const ApiRoutes = HttpRouter.use((router) =>
         });
       }),
     );
+
+    yield* router.add("POST", "/api/retention/sweep", () => Effect.map(retention.sweep(), json));
 
     yield* router.add("POST", "/api/ingest", () =>
       Effect.gen(function* () {

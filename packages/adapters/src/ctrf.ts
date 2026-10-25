@@ -1,20 +1,29 @@
 // Identity adapter: the artifact already contains CTRF. Validate and fill in environment.
-import { validateReport, type CtrfReport } from "@quality-sh/verdict-schema";
-import { basename, environmentFrom, type Adapter, type AdapterInput } from "./types.ts";
+import { validateReport, type CtrfReport } from "@quality-sh/tag-schema";
+import { environmentFrom, isJson, parseJson, type Adapter, type AdapterInput } from "./types.ts";
 
-const isCandidate = (p: string) => {
-  const b = basename(p);
-  return b.endsWith(".ctrf.json") || b === "ctrf-report.json" || b === "ctrf.json";
-};
+/** A CTRF report by shape: `results` with a tool, a summary and a list of tests. */
+function looksLikeCtrf(o: unknown): boolean {
+  if (!o || typeof o !== "object") return false;
+  const r = (o as { results?: unknown }).results;
+  return (
+    !!r &&
+    typeof r === "object" &&
+    "tool" in r &&
+    "summary" in r &&
+    Array.isArray((r as { tests?: unknown }).tests)
+  );
+}
 
 export const ctrfAdapter: Adapter = {
   name: "ctrf",
   version: "0.1.0",
-  detect: (paths) => paths.some(isCandidate),
+  detect: (paths) => paths.some(isJson),
   async parse({ files, context }: AdapterInput): Promise<CtrfReport[]> {
     const out: CtrfReport[] = [];
-    for (const f of files.filter((f) => isCandidate(f.path))) {
-      const parsed: unknown = JSON.parse(await f.text());
+    for (const f of files.filter((f) => isJson(f.path))) {
+      const parsed = parseJson(await f.text());
+      if (!looksLikeCtrf(parsed)) continue;
       const v = validateReport(parsed);
       if (!v.ok) throw new Error(`${f.path}: invalid CTRF: ${v.errors.slice(0, 5).join("; ")}`);
       const r = v.report;

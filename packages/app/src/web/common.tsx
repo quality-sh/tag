@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Cause } from "effect";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { useAtomRefresh, useAtomSet } from "@effect/atom-react/Hooks";
-import { Empty, TopbarAction, type Segment } from "@quality-sh/verdict-ui";
+import { Empty, TopbarAction, type Segment } from "@quality-sh/tag-ui";
 import { Unauthorized } from "./client.ts";
 import { logoutFn, sessionAtom } from "./state.ts";
 

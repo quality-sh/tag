@@ -9,7 +9,7 @@ import {
   validateReport,
   withIdentity,
   type CtrfReport,
-} from "@quality-sh/verdict-schema";
+} from "@quality-sh/tag-schema";
 import type { Collection, Ref, ReportLite } from "../grouping.ts";
 import { AppConfig } from "./config.ts";
 import { ArtifactStore } from "./artifact-store.ts";
@@ -133,6 +133,22 @@ export interface Interface {
     runId: string,
   ) => Effect.Effect<ReadonlyArray<ArtifactRow>, DbError>;
   readonly getArtifact: (artifactId: string) => Effect.Effect<Option.Option<ArtifactRow>, DbError>;
+  /** A completed run never changes: once its artifacts are listed, later passes read them from here. */
+  readonly markRunSeen: (
+    owner: string,
+    repo: string,
+    runId: string,
+  ) => Effect.Effect<void, DbError>;
+  readonly seenRuns: (owner: string, repo: string) => Effect.Effect<ReadonlySet<string>, DbError>;
+  /** After a sweep: the files are gone, so the row is "listed" again, or "expired" when the source is too. */
+  readonly markArtifactSwept: (
+    artifactId: string,
+    state: "listed" | "expired",
+  ) => Effect.Effect<void, DbError>;
+  /** Cached artifacts whose run (or, failing that, cache time) is older than `cutoff`. */
+  readonly cachedArtifactsBefore: (
+    cutoff: string,
+  ) => Effect.Effect<ReadonlyArray<ArtifactRow>, DbError>;
   readonly repos: () => Effect.Effect<
     ReadonlyArray<{ readonly owner: string; readonly repo: string; readonly reports: number }>,
     DbError
@@ -156,7 +172,7 @@ export interface Interface {
   >;
 }
 
-export class Service extends Context.Service<Service, Interface>()("@verdict/ResultStore") {}
+export class Service extends Context.Service<Service, Interface>()("@tag/ResultStore") {}
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS reports (
@@ -186,6 +202,9 @@ CREATE TABLE IF NOT EXISTS artifacts (
   size_bytes INTEGER NOT NULL, expires_at TEXT, state TEXT NOT NULL, cached_at TEXT
 );
 CREATE INDEX IF NOT EXISTS artifacts_run ON artifacts(owner, repo, run_id);
+CREATE TABLE IF NOT EXISTS runs_seen (
+  owner TEXT NOT NULL, repo TEXT NOT NULL, run_id TEXT NOT NULL, seen_at TEXT NOT NULL, PRIMARY KEY (owner, repo, run_id)
+);
 CREATE TABLE IF NOT EXISTS report_tags (report_id TEXT NOT NULL, tag TEXT NOT NULL, PRIMARY KEY (report_id, tag));
 CREATE INDEX IF NOT EXISTS report_tags_tag ON report_tags(tag);
 CREATE TABLE IF NOT EXISTS refs (
@@ -222,7 +241,7 @@ const LITE_COLS = `r.report_id AS reportId, r.run_id AS runId, r.owner, r.repo, 
 
 const REF_COLS = `kind, key, owner, repo, commit_sha AS "commit", branch, timestamp, title, url, meta`;
 
-const COLLECTION_COLS = `id, name, description, query, group_by AS groupBy, created_at AS createdAt`;
+const COLLECTION_COLS = `id, name, description, query, created_at AS createdAt`;
 
 type LiteRow = Omit<ReportLite, "tags"> & { readonly tagList: string | null };
 type RefRow = Omit<Ref, "meta"> & { readonly meta: string };
@@ -448,6 +467,27 @@ export const make = (db: Database, store: ArtifactStore.Interface): Interface =>
       });
     });
 
+  const markRunSeen = (owner: string, repo: string, runId: string) =>
+    trySync("markRunSeen", () => {
+      db.query<unknown, [string, string, string, string]>(
+        `INSERT OR REPLACE INTO runs_seen (owner, repo, run_id, seen_at) VALUES (?, ?, ?, ?)`,
+      ).run(owner, repo, runId, new Date().toISOString());
+    });
+
+  const seenRuns = (owner: string, repo: string) =>
+    trySync(
+      "seenRuns",
+      () =>
+        new Set(
+          db
+            .query<{ runId: string }, [string, string]>(
+              `SELECT run_id AS runId FROM runs_seen WHERE owner = ? AND repo = ?`,
+            )
+            .all(owner, repo)
+            .map((r) => r.runId),
+        ) as ReadonlySet<string>,
+    );
+
   const artifactsOfRun = (owner: string, repo: string, runId: string) =>
     trySync("artifactsOfRun", () =>
       db
@@ -455,6 +495,24 @@ export const make = (db: Database, store: ArtifactStore.Interface): Interface =>
           `SELECT ${ARTIFACT_COLS} FROM artifacts WHERE owner = ? AND repo = ? AND run_id = ? ORDER BY name`,
         )
         .all(owner, repo, runId),
+    );
+  const markArtifactSwept = (artifactId: string, state: "listed" | "expired") =>
+    trySync("markArtifactSwept", () => {
+      db.query(`UPDATE artifacts SET state = ?, cached_at = NULL WHERE artifact_id = ?`).run(
+        state,
+        artifactId,
+      );
+    });
+  const cachedArtifactsBefore = (cutoff: string) =>
+    trySync("cachedArtifactsBefore", () =>
+      db
+        .query<ArtifactRow, [string]>(
+          `SELECT ${ARTIFACT_COLS} FROM artifacts a
+           WHERE a.state = 'cached'
+             AND COALESCE((SELECT MAX(r.timestamp) FROM reports r WHERE r.artifact_id = a.artifact_id), a.cached_at, '') < ?
+           ORDER BY a.cached_at`,
+        )
+        .all(cutoff),
     );
   const getArtifact = (artifactId: string) =>
     trySync("getArtifact", () =>
@@ -544,13 +602,14 @@ export const make = (db: Database, store: ArtifactStore.Interface): Interface =>
         `INSERT INTO collections (id, name, description, query, group_by, created_at)
          VALUES ($id, $name, $description, $query, $groupBy, $createdAt)
          ON CONFLICT(id) DO UPDATE SET name = excluded.name, description = excluded.description,
-           query = excluded.query, group_by = excluded.group_by`,
+           query = excluded.query`,
       ).run({
         $id: c.id,
         $name: c.name,
         $description: c.description,
         $query: c.query,
-        $groupBy: c.groupBy,
+        // The column predates scopes; every view is on a collection's page now.
+        $groupBy: "release",
         $createdAt: c.createdAt,
       });
     });
@@ -599,6 +658,10 @@ export const make = (db: Database, store: ArtifactStore.Interface): Interface =>
     upsertArtifact,
     artifactsOfRun,
     getArtifact,
+    markRunSeen,
+    seenRuns,
+    cachedArtifactsBefore,
+    markArtifactSwept,
     repos,
     reports,
     upsertRef,

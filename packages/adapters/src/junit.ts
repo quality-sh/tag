@@ -5,16 +5,8 @@ import {
   type CtrfReport,
   type CtrfTest,
   type Mutable,
-} from "@quality-sh/verdict-schema";
-import { basename, environmentFrom, type Adapter, type AdapterInput } from "./types.ts";
-
-const isCandidate = (p: string) => {
-  const b = basename(p).toLowerCase();
-  return (
-    b.endsWith(".xml") &&
-    (b.includes("junit") || b.includes("test") || b.includes("results") || b === "report.xml")
-  );
-};
+} from "@quality-sh/tag-schema";
+import { basename, environmentFrom, isXml, type Adapter, type AdapterInput } from "./types.ts";
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -124,7 +116,7 @@ export function convertJUnit(
     runId: ctx.runId,
     // The run's time when CI gave one: a suite's own stamp can be stale or missing.
     timestamp: ctx.timestamp ?? new Date(earliest).toISOString(),
-    generatedBy: "verdict-adapter-junit",
+    generatedBy: "tag-adapter-junit",
     results: {
       tool: {
         name: toolName.toLowerCase() === "pytest" ? "pytest" : "junit",
@@ -145,7 +137,7 @@ export function convertJUnit(
       tests,
       environment: environmentFrom(ctx),
       extra: {
-        "verdict.artifacts": [
+        "tag.artifacts": [
           {
             kind: "junit-xml",
             name: basename(sourcePath),
@@ -161,10 +153,10 @@ export function convertJUnit(
 export const junitAdapter: Adapter = {
   name: "junit",
   version: "0.1.0",
-  detect: (paths) => paths.some(isCandidate),
+  detect: (paths) => paths.some(isXml),
   async parse({ files, context }) {
     const out: CtrfReport[] = [];
-    for (const f of files.filter((f) => isCandidate(f.path))) {
+    for (const f of files.filter((f) => isXml(f.path))) {
       const xml = await f.text();
       if (!looksLikeJUnit(xml)) continue;
       out.push(convertJUnit(xml, context, f.path));

@@ -3,8 +3,8 @@
 import { Context, Effect, Layer, Redacted } from "effect";
 import { AppConfig } from "./config.ts";
 
-export const SESSION_COOKIE = "verdict_session";
-export const ARTIFACT_COOKIE = "verdict_artifacts";
+export const SESSION_COOKIE = "tag_session";
+export const ARTIFACT_COOKIE = "tag_artifacts";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const HANDOFF_TTL_MS = 60 * 1000;
 
@@ -19,7 +19,7 @@ export interface Interface {
   readonly verifyHandoff: (token: string | undefined) => boolean;
 }
 
-export class Service extends Context.Service<Service, Interface>()("@verdict/Auth") {}
+export class Service extends Context.Service<Service, Interface>()("@tag/Auth") {}
 
 const hmac = (secret: string, message: string): string => {
   const h = new Bun.CryptoHasher("sha256", secret);
@@ -65,7 +65,7 @@ export const layer = Layer.effect(
     const cfg = yield* AppConfig.Service;
     const auth = make(Redacted.value(cfg.password), Redacted.value(cfg.sessionSecret));
     yield* Effect.logInfo(
-      auth.enabled ? "auth: shared password enabled" : "auth: DISABLED (set VERDICT_PASSWORD)",
+      auth.enabled ? "auth: shared password enabled" : "auth: DISABLED (set TAG_PASSWORD)",
     );
     return Service.of(auth);
   }),

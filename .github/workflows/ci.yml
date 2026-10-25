@@ -84,8 +84,8 @@ jobs:
         ports:
           - 9000:9000
         env:
-          RUSTFS_ACCESS_KEY: verdict
-          RUSTFS_SECRET_KEY: verdictdev
+          RUSTFS_ACCESS_KEY: tag
+          RUSTFS_SECRET_KEY: tagdev
     steps:
       - name: Check out head and base revisions
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

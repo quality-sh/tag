@@ -1,7 +1,7 @@
 // The pipeline: source -> zip -> store -> adapters -> result store. Idempotent at every step.
-import { Context, Effect, Layer } from "effect";
-import { runAdapters, type FileRef, type RunContext } from "@quality-sh/verdict-adapters";
-import { withTags } from "@quality-sh/verdict-schema";
+import { Context, Effect, Layer, Semaphore } from "effect";
+import { runAdapters, type FileRef, type RunContext } from "@quality-sh/tag-adapters";
+import { withTags } from "@quality-sh/tag-schema";
 import type { Ref } from "../grouping.ts";
 import { AppConfig } from "./config.ts";
 import {
@@ -41,7 +41,7 @@ export interface Interface {
   >;
 }
 
-export class Service extends Context.Service<Service, Interface>()("@verdict/Ingest") {}
+export class Service extends Context.Service<Service, Interface>()("@tag/Ingest") {}
 
 export const artifactPrefix = (a: { owner: string; repo: string; artifactId: string }) =>
   `artifacts/${a.owner}/${a.repo}/${a.artifactId}/`;
@@ -59,7 +59,21 @@ export const layer = Layer.effect(
     const cacheArtifact = Effect.fn("Ingest.cacheArtifact")(function* (artifact: ArtifactMeta) {
       const prefix = artifactPrefix(artifact);
       const done = yield* store.has(prefix + COMPLETE);
-      if (done) return { prefix, fetched: false };
+      if (done) {
+        // The files are there (an earlier run, or a rebuilt index): say so, or retention never sees them.
+        yield* results.upsertArtifact({
+          artifactId: artifact.artifactId,
+          owner: artifact.owner,
+          repo: artifact.repo,
+          runId: artifact.runId,
+          name: artifact.name,
+          sizeBytes: artifact.sizeBytes,
+          expiresAt: artifact.expiresAt ?? null,
+          state: "cached",
+          cachedAt: null,
+        });
+        return { prefix, fetched: false };
+      }
       const zip = yield* source.openArtifact(artifact);
       const entries = yield* Effect.try({
         try: () => extractZip(zip),
@@ -188,29 +202,54 @@ export const layer = Layer.effect(
             return Effect.succeed([] as ReadonlyArray<RunMeta>);
           }),
         );
-      for (const run of runs) {
+      const seen = yield* results
+        .seenRuns(repo.owner, repo.repo)
+        .pipe(Effect.catchCause(() => Effect.succeed(new Set<string>() as ReadonlySet<string>)));
+      // A completed run never changes: list its artifacts once, then work from the index.
+      const artifactsOf = Effect.fn("Ingest.artifactsOf")(function* (run: RunMeta) {
+        if (seen.has(run.runId)) {
+          const rows = yield* results.artifactsOfRun(run.owner, run.repo, run.runId);
+          return {
+            fresh: false,
+            artifacts: rows.map((r): ArtifactMeta => ({
+              artifactId: r.artifactId,
+              owner: r.owner,
+              repo: r.repo,
+              runId: r.runId,
+              name: r.name,
+              sizeBytes: r.sizeBytes,
+              ...(r.expiresAt ? { expiresAt: r.expiresAt } : {}),
+              // Cached ones have been through the adapters already.
+              expired: r.state !== "listed",
+            })),
+          };
+        }
+        return { fresh: true, artifacts: yield* source.listArtifacts(run) };
+      });
+      const ingestRun = Effect.fn("Ingest.ingestRun")(function* (run: RunMeta) {
         acc.runs++;
-        const artifacts = yield* source.listArtifacts(run).pipe(
+        const listed = yield* artifactsOf(run).pipe(
           Effect.catchCause((c) => {
             acc.errors.push(`listArtifacts ${run.runId}: ${String(c)}`);
-            return Effect.succeed([] as ReadonlyArray<ArtifactMeta>);
+            return Effect.succeed({ fresh: false, artifacts: [] as ReadonlyArray<ArtifactMeta> });
           }),
         );
-        for (const artifact of artifacts) {
+        for (const artifact of listed.artifacts) {
           acc.artifacts++;
-          yield* results
-            .upsertArtifact({
-              artifactId: artifact.artifactId,
-              owner: artifact.owner,
-              repo: artifact.repo,
-              runId: artifact.runId,
-              name: artifact.name,
-              sizeBytes: artifact.sizeBytes,
-              expiresAt: artifact.expiresAt ?? null,
-              state: artifact.expired ? "expired" : "listed",
-              cachedAt: null,
-            })
-            .pipe(Effect.ignore);
+          if (listed.fresh)
+            yield* results
+              .upsertArtifact({
+                artifactId: artifact.artifactId,
+                owner: artifact.owner,
+                repo: artifact.repo,
+                runId: artifact.runId,
+                name: artifact.name,
+                sizeBytes: artifact.sizeBytes,
+                expiresAt: artifact.expiresAt ?? null,
+                state: artifact.expired ? "expired" : "listed",
+                cachedAt: null,
+              })
+              .pipe(Effect.ignore);
           if (artifact.expired) continue;
           yield* ingestArtifact(run, artifact, acc).pipe(
             Effect.catchCause((c) => {
@@ -219,7 +258,11 @@ export const layer = Layer.effect(
             }),
           );
         }
-      }
+        if (listed.fresh)
+          yield* results.markRunSeen(run.owner, run.repo, run.runId).pipe(Effect.ignore);
+      });
+      // A few runs at a time: GitHub's secondary limits frown on a burst of parallel calls.
+      yield* Effect.forEach(runs, ingestRun, { concurrency: 4, discard: true });
       yield* Effect.logInfo(
         `ingest ${repo.owner}/${repo.repo}: ${acc.runs} runs, ${acc.artifacts} artifacts, ${acc.inserted} new reports${acc.errors.length ? `, ${acc.errors.length} errors` : ""}`,
       );
@@ -252,8 +295,14 @@ export const layer = Layer.effect(
       return total;
     });
 
+    // One pass at a time: a second "check for new runs" waits for the first instead of doubling the calls.
+    const onePass = yield* Semaphore.make(1);
     void cfg;
-    return Service.of({ ingestRepo, ingestAll, cacheArtifact });
+    return Service.of({
+      ingestRepo: (repo, opts) => onePass.withPermits(1)(ingestRepo(repo, opts)),
+      ingestAll: (opts) => onePass.withPermits(1)(ingestAll(opts)),
+      cacheArtifact,
+    });
   }),
 );
 

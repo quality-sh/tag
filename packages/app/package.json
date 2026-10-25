@@ -1,17 +1,17 @@
 {
-  "name": "@quality-sh/verdict-app",
+  "name": "@quality-sh/tag-app",
   "version": "0.0.1",
   "type": "module",
   "dependencies": {
     "@effect/atom-react": "4.0.6",
     "@effect/platform-bun": "^4.0.6",
-    "@quality-sh/verdict-adapters": "workspace:*",
-    "@quality-sh/verdict-schema": "workspace:*",
+    "@quality-sh/tag-adapters": "workspace:*",
+    "@quality-sh/tag-schema": "workspace:*",
     "effect": "^4.0.6",
     "fflate": "^0.8.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "@quality-sh/verdict-ui": "workspace:*"
+    "@quality-sh/tag-ui": "workspace:*"
   },
   "devDependencies": {
     "@stylexjs/unplugin": "^0.19.1",

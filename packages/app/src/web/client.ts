@@ -8,6 +8,7 @@ import type {
   GroupBy,
   GroupRow,
   Range,
+  RepoOverview,
   RunSummary,
   Suggestion,
 } from "../grouping.ts";
@@ -146,10 +147,30 @@ export interface IngestSummary {
   errors: string[];
 }
 
+export interface CollectionRow extends Collection {
+  runs: number;
+  failing: number;
+  repos: number;
+}
+export interface OverviewPage {
+  range: Range;
+  query: string;
+  repos: RepoOverview[];
+  collections: CollectionRow[];
+  counts: Record<string, number>;
+  repoList: RepoRow[];
+}
 export interface GroupsQuery {
   readonly by: GroupBy;
   readonly q: string;
   readonly range: Range;
+  /** A collection whose query scopes the view, by id. */
+  readonly c?: string | undefined;
+}
+export interface OverviewQuery {
+  readonly range: Range;
+  readonly q: string;
+  readonly c?: string | undefined;
 }
 export interface GroupsPage {
   by: GroupBy;
@@ -199,6 +220,7 @@ export interface Interface {
     path: string,
   ) => Effect.Effect<{ url: string; cached: boolean }, ApiError | Unauthorized>;
   readonly ingest: () => Effect.Effect<IngestSummary, ApiError | Unauthorized>;
+  readonly overview: (q: OverviewQuery) => Effect.Effect<OverviewPage, ApiError | Unauthorized>;
   readonly groups: (q: GroupsQuery) => Effect.Effect<GroupsPage, ApiError | Unauthorized>;
   readonly group: (
     q: GroupsQuery & { readonly key: string },
@@ -206,14 +228,14 @@ export interface Interface {
   readonly fields: (
     typed: string,
   ) => Effect.Effect<ReadonlyArray<Suggestion>, ApiError | Unauthorized>;
-  readonly collections: () => Effect.Effect<ReadonlyArray<Collection>, ApiError | Unauthorized>;
+  readonly collections: () => Effect.Effect<ReadonlyArray<CollectionRow>, ApiError | Unauthorized>;
   readonly createCollection: (
     input: typeof CollectionInput.Type,
   ) => Effect.Effect<Collection, ApiError | Unauthorized>;
   readonly deleteCollection: (id: string) => Effect.Effect<void, ApiError | Unauthorized>;
 }
 
-export class VerdictApi extends Context.Service<VerdictApi, Interface>()("@verdict/web/Api") {}
+export class TagApi extends Context.Service<TagApi, Interface>()("@tag/web/Api") {}
 
 const make = Effect.gen(function* () {
   const client = yield* HttpClient.HttpClient;
@@ -255,7 +277,7 @@ const make = Effect.gen(function* () {
     return s ? `?${s}` : "";
   };
 
-  return VerdictApi.of({
+  return TagApi.of({
     session: () =>
       get<Session>("/api/session").pipe(
         Effect.catchTag("Unauthorized", () =>
@@ -289,13 +311,15 @@ const make = Effect.gen(function* () {
         `/api/artifacts/${encodeURIComponent(artifactId)}/link?path=${encodeURIComponent(path)}`,
       ),
     ingest: () => post<IngestSummary>("/api/ingest", {}),
-    groups: (g) => get<GroupsPage>(`/api/groups${query({ by: g.by, q: g.q, range: g.range })}`),
+    overview: (o) => get<OverviewPage>(`/api/overview${query({ range: o.range, q: o.q, c: o.c })}`),
+    groups: (g) =>
+      get<GroupsPage>(`/api/groups${query({ by: g.by, q: g.q, range: g.range, c: g.c })}`),
     group: (g) =>
       get<GroupDetail>(
-        `/api/groups/${encodeURIComponent(g.by)}/${encodeURIComponent(g.key)}${query({ q: g.q, range: g.range })}`,
+        `/api/groups/${encodeURIComponent(g.by)}/${encodeURIComponent(g.key)}${query({ q: g.q, range: g.range, c: g.c })}`,
       ),
     fields: (typed) => get<ReadonlyArray<Suggestion>>(`/api/fields${query({ q: typed })}`),
-    collections: () => get<ReadonlyArray<Collection>>("/api/collections"),
+    collections: () => get<ReadonlyArray<CollectionRow>>("/api/collections"),
     createCollection: (input) => post<Collection>("/api/collections", input),
     deleteCollection: (id) =>
       HttpClient.del(`/api/collections/${encodeURIComponent(id)}`).pipe(
@@ -307,4 +331,4 @@ const make = Effect.gen(function* () {
   });
 });
 
-export const layer = Layer.effect(VerdictApi, make).pipe(Layer.provide(FetchHttpClient.layer));
+export const layer = Layer.effect(TagApi, make).pipe(Layer.provide(FetchHttpClient.layer));
