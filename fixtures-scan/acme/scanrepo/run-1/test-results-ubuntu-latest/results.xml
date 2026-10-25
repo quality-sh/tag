@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+<testsuite name="nextest" errors="0" failures="1" skipped="0" tests="3" time="0.021" timestamp="2026-10-25T08:00:00Z" hostname="runner">
+  <testcase classname="crate::pricing" name="test_discount_applies" time="0.008">
+  </testcase>
+  <testcase classname="crate::pricing" name="test_tax_rounding" time="0.005">
+  </testcase>
+  <testcase classname="crate::inventory" name="test_oversell_blocked" time="0.008">
+    <failure type="assert" message="oversell was allowed">assertion failed</failure>
+  </testcase>
+</testsuite>
+</testsuites>

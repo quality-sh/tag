@@ -183,6 +183,11 @@ export interface Interface {
   /** Every scan row, for the routes that prefer a repository's own default branch. */
   readonly scans: () => Effect.Effect<ReadonlyArray<ScanRow>, DbError>;
   readonly scanOf: (owner: string, repo: string) => Effect.Effect<Option.Option<ScanRow>, DbError>;
+  /** Every indexed artifact name of a repository, and whether a report came from it. */
+  readonly artifactNames: (
+    owner: string,
+    repo: string,
+  ) => Effect.Effect<ReadonlyArray<{ name: string; reported: boolean }>, DbError>;
   /** After a sweep: the files are gone, so the row is "listed" again, or "expired" when the source is too. */
   readonly markArtifactSwept: (
     artifactId: string,
@@ -650,6 +655,18 @@ export const make = (db: Database, store: ArtifactStore.Interface): Interface =>
       return row === undefined || row === null ? Option.none<ScanRow>() : Option.some(scanRow(row));
     });
 
+  const artifactNames = (owner: string, repo: string) =>
+    trySync("artifactNames", () =>
+      db
+        .query<{ name: string; reported: number }, [string, string]>(
+          `SELECT a.name, EXISTS(SELECT 1 FROM reports r
+             WHERE r.owner = a.owner AND r.repo = a.repo AND r.artifact_name = a.name) AS reported
+           FROM artifacts a WHERE a.owner = ? AND a.repo = ? GROUP BY a.name ORDER BY a.name`,
+        )
+        .all(owner, repo)
+        .map((r) => ({ name: r.name, reported: r.reported === 1 })),
+    );
+
   const artifactsOfRun = (owner: string, repo: string, runId: string) =>
     trySync("artifactsOfRun", () =>
       db
@@ -828,6 +845,7 @@ export const make = (db: Database, store: ArtifactStore.Interface): Interface =>
     upsertScan,
     scans,
     scanOf,
+    artifactNames,
     cachedArtifactsBefore,
     markArtifactSwept,
     repos,

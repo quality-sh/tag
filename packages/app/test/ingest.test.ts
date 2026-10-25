@@ -245,13 +245,15 @@ describe("ingest pipeline (fixtures -> fs store -> sqlite)", () => {
       expect(second.inserted).toBe(0);
       expect(second.cached).toBe(0);
 
-      // The repository's own words about its default branch and environments are stored.
+      // The repository's own words about its default branch and environments are stored,
+      // alongside what the scan found: every fixture artifact name produced a report.
       expect(Option.getOrNull(yield* results.scanOf("acme", "widgets"))).toMatchObject({
         owner: "acme",
         repo: "widgets",
         defaultBranch: "develop",
         environments: ["production", "staging"],
-        classification: null,
+        classification: "reporting",
+        reporting: ["deepeval-results", "junit-results", "playwright-report"],
       });
 
       const runs = yield* results.listRuns({ owner: "acme", repo: "widgets" });
