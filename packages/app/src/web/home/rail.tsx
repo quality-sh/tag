@@ -1,17 +1,18 @@
-// The rail every page shares: the overview, every org and repository, the collections.
+// The rail every page shares: the overview, onboarding, every org and repository, the collections.
 import type { ReactNode } from "react";
 import { RailGroup, RailItem } from "@quality-sh/tag-ui";
 import type { Collection, Range } from "../../grouping.ts";
 import type { RepoRow } from "../client.ts";
 import { href, scopePath, type Scope } from "../state.ts";
 
-/** Where a page can go: the overview, every org and repository, the collections. */
+/** Where a page can go: the overview, onboarding, every org and repository, the collections. */
 export function Rail({
   scope,
   range,
   collections,
   repos,
   overview,
+  onboarding,
   children,
 }: {
   scope?: Scope | undefined;
@@ -19,6 +20,7 @@ export function Rail({
   collections?: ReadonlyArray<Collection> | undefined;
   repos?: ReadonlyArray<RepoRow> | undefined;
   overview?: boolean;
+  onboarding?: boolean;
   /** Extra groups, such as a page's own sections. */
   children?: ReactNode;
 }) {
@@ -30,6 +32,9 @@ export function Rail({
       <RailGroup title="Home">
         <RailItem href={href.overview(range)} on={overview === true}>
           overview
+        </RailItem>
+        <RailItem href={href.onboarding()} on={onboarding === true}>
+          add repositories
         </RailItem>
       </RailGroup>
       {children}

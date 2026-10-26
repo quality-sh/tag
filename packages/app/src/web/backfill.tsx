@@ -4,6 +4,7 @@ import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react/Hooks";
 import { K } from "@quality-sh/tag-ui";
 import type { RepositoryState } from "./client.ts";
+import { progressText } from "./onboarding-steps.ts";
 import { refreshRunsFn, repositoriesAtom } from "./state.ts";
 
 const POLL_MS = 2000;
@@ -35,8 +36,7 @@ export const backfillOf = (
   repo: string,
 ): RepositoryState | undefined => states.find((s) => s.owner === owner && s.repo === repo);
 
-export const progressText = (s: RepositoryState) =>
-  s.backfillTotal === null ? "backfilling" : `backfilling, ${s.backfillDone} of ${s.backfillTotal}`;
+export { progressText };
 
 /** One line per repository still backfilling, for a toolbar. */
 export function BackfillStatus({ states }: { states: ReadonlyArray<RepositoryState> }) {

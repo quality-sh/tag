@@ -23,15 +23,24 @@ import { openProposalFn, proposalAtom } from "./state.ts";
 
 /** The action and, once asked for, the panel; nothing for a repository that needs no change. */
 export function ProposalSection({ scan }: { scan: RepoScan | undefined }) {
-  const [open, setOpen] = useState(false);
   if (scan?.classification !== "needs-change") return null;
   return (
     <Section eyebrow="CI change" count={scanNote(scan)}>
+      <ProposalAction owner={scan.owner} repo={scan.repo} />
+    </Section>
+  );
+}
+
+/** The "Propose pull request" button and the panel it opens. */
+export function ProposalAction({ owner, repo }: { owner: string; repo: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
       <Cmd small onClick={() => setOpen((o) => !o)}>
         {open ? "Hide the proposal" : "Propose pull request"}
       </Cmd>
-      {open && <ProposalPanel owner={scan.owner} repo={scan.repo} />}
-    </Section>
+      {open && <ProposalPanel owner={owner} repo={repo} />}
+    </>
   );
 }
 
@@ -95,7 +104,7 @@ function ProposalBody({ p }: { p: Proposal }) {
   );
 }
 
-function PullRequestLine({ pr }: { pr: ProposedPullRequest }) {
+export function PullRequestLine({ pr }: { pr: ProposedPullRequest }) {
   return (
     <Inline>
       <Link href={pr.url} external>
