@@ -1,0 +1,12 @@
+**/node_modules
+.data*
+**/.data*
+fixtures
+coverage
+.git
+.beads
+.agents
+.claude
+.codex
+.env*
+packages/app/dist
