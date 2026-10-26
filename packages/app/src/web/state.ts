@@ -111,7 +111,7 @@ export const routeAtom = Atom.make<Route>(parseRoute(location.hash)).pipe(Atom.k
 
 export const runtime = Atom.runtime(apiLayer);
 
-const keys = { session: ["session"], runs: ["runs"], collections: ["collections"] } as const;
+export const keys = { session: ["session"], runs: ["runs"], collections: ["collections"] } as const;
 
 const withApi = <A, E>(f: (api: TagApi["Service"]) => Effect.Effect<A, E>) =>
   Effect.gen(function* () {

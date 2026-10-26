@@ -163,7 +163,7 @@ export const serveApp = async (
         Layer.provide(installation),
         Layer.provide(config),
       )
-    : ArtifactSource.layerFixtures(FIXTURES);
+    : ArtifactSource.layerFixtures(opts.overrides?.fixturesDir ?? FIXTURES);
   const ingest = Ingest.layer.pipe(Layer.provide(Layer.mergeAll(config, store, source, results)));
   const retention = Retention.layer.pipe(Layer.provide(Layer.mergeAll(config, store, results)));
   const auth = Auth.layer.pipe(Layer.provide(config));

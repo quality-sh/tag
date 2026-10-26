@@ -2,7 +2,7 @@
 import { Context, Effect, Option, Schema } from "effect";
 import type { CtrfReport } from "@quality-sh/tag-schema";
 import type { RunnerFinding, ScanClassification, UnreadArtifact } from "../scan.ts";
-import type { Collection, Ref, ReportLite } from "../grouping.ts";
+import type { Collection, Ref, ReleaseGroup, ReportLite } from "../grouping.ts";
 import type { ArtifactStore } from "./artifact-store.ts";
 
 export class DbError extends Schema.TaggedError<DbError>()("ResultStore.DbError", {
@@ -213,6 +213,12 @@ export interface Interface {
   readonly collections: () => Effect.Effect<ReadonlyArray<Collection>, DbError>;
   readonly saveCollection: (c: Collection) => Effect.Effect<void, DbError>;
   readonly deleteCollection: (id: string) => Effect.Effect<boolean, DbError>;
+  /** The saved release groups: repositories whose same-name tags are one release. */
+  readonly releaseGroups: () => Effect.Effect<ReadonlyArray<ReleaseGroup>, DbError>;
+  readonly saveReleaseGroup: (group: ReleaseGroup) => Effect.Effect<void, DbError>;
+  /** Suggestion ids the person said no to; a suggestion whose data changed gets a new id. */
+  readonly dismissedSuggestions: () => Effect.Effect<ReadonlySet<string>, DbError>;
+  readonly dismissSuggestion: (id: string) => Effect.Effect<void, DbError>;
   /** One key/value row; the GitHub App installation id lives here between boots. */
   readonly getSetting: (key: string) => Effect.Effect<Option.Option<string>, DbError>;
   readonly setSetting: (key: string, value: string) => Effect.Effect<void, DbError>;
