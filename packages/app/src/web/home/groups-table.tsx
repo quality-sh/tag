@@ -34,10 +34,14 @@ export function GroupsTable({
 }) {
   const by = d.by;
   const groups = limit === undefined ? d.groups : d.groups.slice(0, limit);
+  // A release group's members sit under its version row, narrowed to their repository.
+  const members = new Set(groups.flatMap((g) => g.members ?? []));
   const nameOf = (g: GroupRow) =>
     by === "run" && g.latest
       ? href.report(g.latest.reportIds[0] ?? "")
-      : href.group(by, g.key, view);
+      : members.has(g)
+        ? href.group(by, g.key, { ...view, q: `${view.q} repo:${g.owner}/${g.repo}`.trim() })
+        : href.group(by, g.key, view);
   // The table is sectioned by repository, so the repository fact is already said.
   const facts = (g: GroupRow) => g.facts.filter((f) => f !== `${g.owner}/${g.repo}`);
   const columns: Column<GroupRow>[] = [
@@ -48,7 +52,7 @@ export function GroupsTable({
       cell: (g) => (
         <Name sub={facts(g).join(" · ")}>
           <Link ink href={nameOf(g)}>
-            {g.label}
+            {members.has(g) ? `↳ ${g.owner}/${g.repo}` : g.label}
           </Link>
         </Name>
       ),
@@ -135,18 +139,23 @@ export function GroupsTable({
     key,
     head: (
       <HeadRow
-        title={key}
+        title={rows.some((g) => g.members) ? `${key} in lockstep` : key}
         count={`${plural(rows.length, GROUP_BY_INFO[by].one)} · ${plural(
           rows.reduce((a, g) => a + g.runs, 0),
           "run",
         )}`}
       />
     ),
-    rows,
+    rows: rows.flatMap((g) => [g, ...(g.members ?? [])]),
   }));
   const rowKey = (g: GroupRow) => `${g.owner}/${g.repo}:${g.key}`;
   return by === "repo" || flat ? (
-    <Table middle columns={columns} rows={groups} rowKey={rowKey} />
+    <Table
+      middle
+      columns={columns}
+      rows={groups.flatMap((g) => [g, ...(g.members ?? [])])}
+      rowKey={rowKey}
+    />
   ) : (
     <Table middle columns={columns} sections={sections} rowKey={rowKey} />
   );

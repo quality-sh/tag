@@ -24,6 +24,7 @@ import type { OverviewPage as Overview, RepositoryState } from "./client.ts";
 import { InstallLink, Loaded, SignOut, cap } from "./common.tsx";
 import { GroupsTable, Rail, Search, scopeCrumbs } from "./home.tsx";
 import { Repository } from "./overview.tsx";
+import { SuggestionCards } from "./suggestions.tsx";
 import {
   groupsAtom,
   href,
@@ -112,6 +113,7 @@ export function ScopePage({ scope, q, range }: { scope: Scope; q: string; range:
           </Rail>
         }
       >
+        {scope.kind === "org" && <SuggestionCards org={scope.owner} />}
         <Space top={28}>
           <Toolbar>
             <Seg<Range>
