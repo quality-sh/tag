@@ -6,6 +6,7 @@ import type { Filter } from "./query.ts";
 import { dayOf, matches } from "./match.ts";
 import { assign, sameRepo, type Assigned, type Ref } from "./refs.ts";
 import { runKey, runsOf, type RunSummary, type TrendPoint } from "./runs.ts";
+import { lockRows, type ReleaseGroup } from "./release-groups.ts";
 
 export type Verdict = "passed" | "failed" | "none";
 
@@ -26,6 +27,8 @@ export interface GroupRow {
   readonly baselineRun: RunSummary | null;
   readonly lastAt: string;
   readonly ref: Ref | null;
+  /** A release group's version row: the member repositories' own rows. */
+  readonly members?: ReadonlyArray<GroupRow>;
 }
 
 export interface GroupInput {
@@ -39,6 +42,8 @@ export interface GroupInput {
   readonly defaultBranch?: string | undefined;
   /** owner/repo → default branch from the repository API; wins per repo over the guess. */
   readonly defaultBranches?: Readonly<Record<string, string>> | undefined;
+  /** Saved release groups; their members' release rows fold into one row per version. */
+  readonly releaseGroups?: ReadonlyArray<ReleaseGroup> | undefined;
 }
 
 interface Bucket {
@@ -269,11 +274,12 @@ export function computeGroups(input: GroupInput): GroupRow[] {
     });
   }
 
-  rows.sort((a, b2) => {
+  const out = by === "release" ? lockRows(rows, input.releaseGroups ?? [], trendPoints) : rows;
+  out.sort((a, b2) => {
     if (by === "release" && a.ref && b2.ref) return b2.ref.timestamp.localeCompare(a.ref.timestamp);
     if (by === "release" && (a.key === "unreleased") !== (b2.key === "unreleased"))
       return a.key === "unreleased" ? -1 : 1;
     return b2.lastAt.localeCompare(a.lastAt);
   });
-  return rows;
+  return out;
 }

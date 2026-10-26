@@ -2,7 +2,7 @@
 import { Context, Effect, Option, Schema } from "effect";
 import type { CtrfReport } from "@quality-sh/tag-schema";
 import type { RunnerFinding, ScanClassification, UnreadArtifact } from "../scan.ts";
-import type { Collection, Ref, ReportLite } from "../grouping.ts";
+import type { Collection, Ref, ReleaseGroup, ReportLite } from "../grouping.ts";
 import type { ArtifactStore } from "./artifact-store.ts";
 
 export class DbError extends Schema.TaggedError<DbError>()("ResultStore.DbError", {
@@ -123,6 +123,16 @@ export interface ProposalRow {
   readonly openedAt: string;
 }
 
+/** A completed run a webhook delivery named, waiting for the queue worker. */
+export interface QueuedRun {
+  readonly owner: string;
+  readonly repo: string;
+  readonly runId: string;
+  readonly queuedAt: string;
+  readonly attempts: number;
+  readonly lastError: string | null;
+}
+
 export interface RunFilter {
   readonly owner?: string;
   readonly repo?: string;
@@ -220,9 +230,33 @@ export interface Interface {
   readonly collections: () => Effect.Effect<ReadonlyArray<Collection>, DbError>;
   readonly saveCollection: (c: Collection) => Effect.Effect<void, DbError>;
   readonly deleteCollection: (id: string) => Effect.Effect<boolean, DbError>;
+  /** The saved release groups: repositories whose same-name tags are one release. */
+  readonly releaseGroups: () => Effect.Effect<ReadonlyArray<ReleaseGroup>, DbError>;
+  readonly saveReleaseGroup: (group: ReleaseGroup) => Effect.Effect<void, DbError>;
+  /** Suggestion ids the person said no to; a suggestion whose data changed gets a new id. */
+  readonly dismissedSuggestions: () => Effect.Effect<ReadonlySet<string>, DbError>;
+  readonly dismissSuggestion: (id: string) => Effect.Effect<void, DbError>;
   /** One key/value row; the GitHub App installation id lives here between boots. */
   readonly getSetting: (key: string) => Effect.Effect<Option.Option<string>, DbError>;
   readonly setSetting: (key: string, value: string) => Effect.Effect<void, DbError>;
+  /**
+   * Record a delivery and queue its run, both or neither. A delivery id seen before is a
+   * no-op; a run already queued stays queued once.
+   */
+  readonly queueRun: (
+    deliveryId: string | undefined,
+    run: Pick<QueuedRun, "owner" | "repo" | "runId">,
+  ) => Effect.Effect<{ readonly duplicate: boolean }, DbError>;
+  /** Every queued run, oldest first. */
+  readonly queuedRuns: () => Effect.Effect<ReadonlyArray<QueuedRun>, DbError>;
+  readonly dequeueRun: (
+    run: Pick<QueuedRun, "owner" | "repo" | "runId">,
+  ) => Effect.Effect<void, DbError>;
+  /** Count a failed attempt and keep its reason; returns the attempts so far. */
+  readonly failQueuedRun: (
+    run: Pick<QueuedRun, "owner" | "repo" | "runId">,
+    error: string,
+  ) => Effect.Effect<number, DbError>;
   /** Drop the index and rebuild it from reports/ in the artifact store. */
   readonly rebuild: () => Effect.Effect<
     { readonly reports: number },

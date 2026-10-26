@@ -16,6 +16,25 @@ function artifactOriginFor(req: HttpServerRequest.HttpServerRequest, artifactPor
   return `${proto}://${host}:${artifactPort}`;
 }
 
+/** Save a collection under a free id made from its name; the one path every save takes. */
+export const createCollection = Effect.fn("Http.createCollection")(function* (
+  results: ResultStore.Interface,
+  input: typeof CollectionInput.Type,
+) {
+  const existing = yield* results.collections();
+  let id = slug(input.name);
+  for (let n = 2; existing.some((c) => c.id === id); n++) id = `${slug(input.name)}-${n}`;
+  const c: Collection = {
+    id,
+    name: input.name,
+    description: input.description ?? "",
+    query: input.query,
+    createdAt: new Date().toISOString(),
+  };
+  yield* results.saveCollection(c);
+  return c;
+});
+
 export const addCollectionRoutes = (deps: {
   readonly router: HttpRouter.HttpRouter;
   readonly results: ResultStore.Interface;
@@ -41,18 +60,7 @@ export const addCollectionRoutes = (deps: {
         const body = yield* HttpServerRequest.schemaBodyJson(CollectionInput).pipe(
           Effect.mapError(() => new BadRequest({ detail: "name and query are required" })),
         );
-        const existing = yield* results.collections();
-        let id = slug(body.name);
-        for (let n = 2; existing.some((c) => c.id === id); n++) id = `${slug(body.name)}-${n}`;
-        const c: Collection = {
-          id,
-          name: body.name,
-          description: body.description ?? "",
-          query: body.query,
-          createdAt: new Date().toISOString(),
-        };
-        yield* results.saveCollection(c);
-        return json(c, 201);
+        return json(yield* createCollection(results, body), 201);
       }),
     );
 

@@ -38,6 +38,8 @@ export const testConfig = (overrides: Partial<AppConfig.Interface> = {}): AppCon
   artifactPort: 0,
   copyPolicy: "copy",
   artifactRetentionDays: 90,
+  webhookSecret: Option.none(),
+  ingestPollMinutes: 0,
   ...overrides,
 });
 
@@ -162,7 +164,12 @@ export const serveApp = async (
     /** A built dashboard; by default tests get a minimal placeholder page. */
     readonly webRoot?: string;
   } = {},
-): Promise<{ readonly base: string; readonly stop: () => Promise<void> }> => {
+): Promise<{
+  readonly base: string;
+  /** The app's own ingest service, for tests that wait on its background work. */
+  readonly ingest: Ingest.Interface;
+  readonly stop: () => Promise<void>;
+}> => {
   const dir = await tmpDir();
   const web = opts.webRoot ?? join(dir, "web");
   if (opts.webRoot === undefined) {
@@ -185,7 +192,7 @@ export const serveApp = async (
         Layer.provide(installation),
         Layer.provide(config),
       )
-    : ArtifactSource.layerFixtures(FIXTURES);
+    : ArtifactSource.layerFixtures(opts.overrides?.fixturesDir ?? FIXTURES);
   const ingest = Ingest.layer.pipe(Layer.provide(Layer.mergeAll(config, store, source, results)));
   const retention = Retention.layer.pipe(Layer.provide(Layer.mergeAll(config, store, results)));
   const auth = Auth.layer.pipe(Layer.provide(config));
@@ -199,7 +206,7 @@ export const serveApp = async (
     auth,
     installation,
   );
-  const ready = Deferred.makeUnsafe<string>();
+  const ready = Deferred.makeUnsafe<{ base: string; ingest: Ingest.Interface }>();
   const done = Deferred.makeUnsafe<void>();
   // Bun.serve listens immediately but answers with a placeholder 404 handler until
   // HttpRouter.serve installs the app, which happens later in the served layer's own
@@ -214,20 +221,25 @@ export const serveApp = async (
       }),
     ),
   );
-  const served = HttpRouter.serve(App(web)).pipe(Layer.provide(services), Layer.provide(bunServer));
   const exited = Effect.runPromiseExit(
     Effect.scoped(
       Effect.gen(function* () {
+        const built = yield* Layer.build(services);
+        const served = HttpRouter.serve(App(web)).pipe(
+          Layer.provide(Layer.succeedContext(built)),
+          Layer.provide(bunServer),
+        );
         yield* Layer.build(served);
         const base = yield* Deferred.await(listening);
-        yield* Deferred.succeed(ready, base);
+        yield* Deferred.succeed(ready, { base, ingest: Context.get(built, Ingest.Service) });
         yield* Deferred.await(done);
       }),
     ),
   );
-  const base = await Effect.runPromise(Deferred.await(ready));
+  const { base, ingest: ingestService } = await Effect.runPromise(Deferred.await(ready));
   return {
     base,
+    ingest: ingestService,
     stop: async () => {
       await Effect.runPromise(Deferred.succeed(done, void 0)).catch(() => {});
       await exited;

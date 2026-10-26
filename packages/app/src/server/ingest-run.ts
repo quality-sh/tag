@@ -5,7 +5,7 @@ import { withTags } from "@quality-sh/tag-schema";
 import type { ArtifactMeta, RunMeta } from "./artifact-source.ts";
 import { ArtifactStore } from "./artifact-store.ts";
 import { ResultStore } from "./result-store.ts";
-import { type IngestError, type Interface } from "./ingest-contract.ts";
+import { type IngestError, type Interface, type RecordError } from "./ingest-contract.ts";
 import { COMPLETE } from "./ingest-cache.ts";
 import { ZipError } from "./zip.ts";
 
@@ -96,3 +96,79 @@ export const makeIngestArtifact = (deps: {
 
   return { ingestArtifact };
 };
+
+/** What indexing one run adds to the tally of the pass or the queued ingest around it. */
+export interface RunTally {
+  runs: number;
+  artifacts: number;
+  reports: number;
+  inserted: number;
+  cached: number;
+  readonly errors: string[];
+}
+
+/**
+ * One run, wherever it was found: record a fresh run's artifacts and mark it seen, then
+ * cache and index each artifact. A failed artifact stays "listed" for the next attempt.
+ */
+export const makeIndexRun = (deps: {
+  readonly results: ResultStore.Interface;
+  readonly ingestArtifact: IngestArtifact;
+  readonly recordError: RecordError;
+}) => {
+  const { results, ingestArtifact, recordError } = deps;
+
+  /** A seen run's artifacts still waiting for a download, read from the index. */
+  const indexedArtifacts = Effect.fn("Ingest.indexedArtifacts")(function* (run: RunMeta) {
+    const rows = yield* results.artifactsOfRun(run.owner, run.repo, run.runId);
+    return rows
+      .filter((r) => r.state === "listed")
+      .map((r): ArtifactMeta => ({
+        artifactId: r.artifactId,
+        owner: r.owner,
+        repo: r.repo,
+        runId: r.runId,
+        name: r.name,
+        sizeBytes: r.sizeBytes,
+        ...(r.expiresAt ? { expiresAt: r.expiresAt } : {}),
+      }));
+  });
+
+  const indexRun = Effect.fn("Ingest.indexRun")(function* (
+    run: RunMeta,
+    listed: ReadonlyArray<ArtifactMeta>,
+    fresh: boolean,
+    acc: RunTally,
+  ) {
+    acc.runs++;
+    if (fresh) {
+      for (const artifact of listed) {
+        yield* results.upsertArtifact({
+          artifactId: artifact.artifactId,
+          owner: artifact.owner,
+          repo: artifact.repo,
+          runId: artifact.runId,
+          name: artifact.name,
+          sizeBytes: artifact.sizeBytes,
+          expiresAt: artifact.expiresAt ?? null,
+          state: artifact.expired ? "expired" : "listed",
+          cachedAt: null,
+        });
+      }
+      yield* results.markRunSeen(run.owner, run.repo, run.runId);
+    }
+    for (const artifact of listed) {
+      acc.artifacts++;
+      if (artifact.expired) continue;
+      yield* ingestArtifact(run, artifact, acc).pipe(
+        Effect.catchCause((c) => {
+          return recordError(acc.errors, `${run.runId}/${artifact.name}: ${String(c)}`);
+        }),
+      );
+    }
+  });
+
+  return { indexedArtifacts, indexRun };
+};
+
+export type IndexRun = ReturnType<typeof makeIndexRun>;

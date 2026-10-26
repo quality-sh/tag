@@ -111,7 +111,7 @@ export const routeAtom = Atom.make<Route>(parseRoute(location.hash)).pipe(Atom.k
 
 export const runtime = Atom.runtime(apiLayer);
 
-const keys = {
+export const keys = {
   session: ["session"],
   runs: ["runs"],
   collections: ["collections"],

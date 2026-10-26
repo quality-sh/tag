@@ -84,6 +84,16 @@ export interface Interface {
   ) => Effect.Effect<IngestSummary, never>;
   /** Every repository the source knows about. */
   readonly ingestAll: (opts?: { readonly limit?: number }) => Effect.Effect<IngestSummary, never>;
+  /**
+   * Queue a completed run a webhook delivery named; the worker ingests it in the background.
+   * A delivery id seen before changes nothing and comes back `duplicate`.
+   */
+  readonly queueRun: (
+    deliveryId: string | undefined,
+    run: RepoRef & { readonly runId: string },
+  ) => Effect.Effect<{ readonly duplicate: boolean }, ResultStore.DbError>;
+  /** Wait until the queue has nothing due and no pass is running. */
+  readonly settled: () => Effect.Effect<void>;
   /** Make sure an artifact's files are in the store; returns the key prefix. */
   readonly cacheArtifact: (
     artifact: ArtifactMeta,

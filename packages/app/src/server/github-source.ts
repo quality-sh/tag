@@ -16,7 +16,7 @@ import { InstallationRepos, PAGE } from "./github-schemas.ts";
 export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig) {
   const installation = yield* Installation.Service;
   const client = yield* makeClient(cfg, installation);
-  const { listRuns, listArtifacts, listRepoArtifacts, openArtifact } = makeRunListing(client);
+  const { listRuns, run, listArtifacts, listRepoArtifacts, openArtifact } = makeRunListing(client);
   const { listRefs } = makeRefs(client);
   const { repoInfo, repoTree, repoFiles } = makeRepoReads(client);
   const { openPullRequest } = makeRepoWrites(client);
@@ -45,6 +45,7 @@ export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig)
     repos,
     repoInfo,
     listRuns,
+    run,
     listArtifacts,
     listRepoArtifacts,
     listRefs,

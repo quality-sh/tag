@@ -113,6 +113,7 @@ export const addReadRoutes = (deps: {
           filters,
           since,
           defaultBranches: branches,
+          releaseGroups: yield* results.releaseGroups(),
         });
         const latest = rows.flatMap((g) => (g.latest ? [g.latest] : []));
         const counts = Object.fromEntries(
