@@ -65,6 +65,13 @@ CREATE TABLE IF NOT EXISTS dismissed_suggestions (
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY, value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS run_queue (
+  owner TEXT NOT NULL, repo TEXT NOT NULL, run_id TEXT NOT NULL, queued_at TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, PRIMARY KEY (owner, repo, run_id)
+);
+CREATE TABLE IF NOT EXISTS webhook_deliveries (
+  delivery_id TEXT PRIMARY KEY, received_at TEXT NOT NULL
+);
 `;
 
 /** Columns added after the first schema; applied when missing so old indexes keep working. */

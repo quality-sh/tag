@@ -43,6 +43,10 @@ export interface Interface {
   readonly copyPolicy: "copy" | "on-view";
   /** Cached artifact files older than this leave the store; 0 keeps them forever. Reports stay. */
   readonly artifactRetentionDays: number;
+  /** The App's webhook secret; with none set, the webhook endpoint answers 404. */
+  readonly webhookSecret: Option.Option<Redacted.Redacted<string>>;
+  /** Minutes between backstop passes; 0 turns the poll off. */
+  readonly ingestPollMinutes: number;
 }
 
 export class Service extends Context.Service<Service, Interface>()("@tag/AppConfig") {}
@@ -121,8 +125,19 @@ export const layer = Layer.effect(
       Config.withDefault(90),
     );
 
+    // An empty value, as .env.example leaves it, means no webhook.
+    const webhookSecret = Option.filter(
+      yield* Config.option(Config.Redacted("GITHUB_WEBHOOK_SECRET")),
+      (secret) => Redacted.value(secret) !== "",
+    );
+    const ingestPollMinutes = yield* Config.Number("INGEST_POLL_MINUTES").pipe(
+      Config.withDefault(10),
+    );
+
     return Service.of({
       artifactRetentionDays,
+      webhookSecret,
+      ingestPollMinutes: Math.max(0, ingestPollMinutes),
       s3,
       dataDir,
       sqlitePath,

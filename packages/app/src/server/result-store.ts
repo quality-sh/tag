@@ -15,6 +15,7 @@ import { makeReports } from "./result-store-reports.ts";
 import { makeCollections } from "./result-store-collections.ts";
 import { makeSuggestionStore } from "./result-store-suggestions.ts";
 import { makeRebuild } from "./result-store-rebuild.ts";
+import { makeQueue } from "./result-store-queue.ts";
 import type { Interface } from "./result-store-rows.ts";
 
 export * from "./result-store-rows.ts";
@@ -31,6 +32,7 @@ export const make = (db: Database, store: ArtifactStore.Interface): Interface =>
     ...makeRepositories(db),
     ...makeReports(db),
     ...makeCollections(db),
+    ...makeQueue(db),
     ...makeSuggestionStore(db),
     ...makeRebuild(db, store, indexReport),
   };

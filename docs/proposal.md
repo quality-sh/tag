@@ -222,7 +222,7 @@ for run in source.listRuns(repo):
     results.ingest(report)
 ```
 
-Triggered three ways: on boot for recent runs, on a `POST /ingest/:owner/:repo` from the UI, and later by a `workflow_run.completed` webhook. Polling is enough for the weekend.
+Triggered four ways: on boot for recent runs, on a `POST /api/ingest` from the UI, by a `workflow_run.completed` webhook that queues the one run, and by a poll every `INGEST_POLL_MINUTES` (default 10) as the backstop for missed deliveries.
 
 ### Storage and caching model
 
@@ -379,4 +379,4 @@ Day 1 is built and verified end to end on fixtures. Where the build departed fro
 
 - Rows 11 and 12 became the groupings model. Scope pages show groups with a verdict, a trend series and a baseline per group, in place of a separate trends API and trends page.
 - The JSON Render box (row 14) uses a hand-written spec and renderer in `packages/app/src/web/spec.ts` and `packages/app/src/web/render.tsx`. It does not use the pinned package.
-- Row 13's README, adapter and deploy docs, Dockerfile and Docker build exclusions landed in this change. Boot ingest and the dashboard ingest button were already in place. There is no ingest poll yet.
+- Row 13's README, adapter and deploy docs, Dockerfile and Docker build exclusions landed in this change. Boot ingest and the dashboard ingest button were already in place. The `workflow_run` webhook and the ten-minute poll came later (tag-hy8.5).

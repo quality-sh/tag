@@ -10,7 +10,7 @@ import {
 import { AppConfig } from "./config.ts";
 import { ResultStore } from "./result-store.ts";
 import type { RecordError } from "./ingest-contract.ts";
-import type { IngestArtifact } from "./ingest-run.ts";
+import type { IndexRun } from "./ingest-run.ts";
 import type { ScanRepo } from "./ingest-scan.ts";
 
 const DAY = 86_400_000;
@@ -19,11 +19,12 @@ export const makeIngestRepo = (deps: {
   readonly cfg: AppConfig.Interface;
   readonly source: ArtifactSource.Interface;
   readonly results: ResultStore.Interface;
-  readonly ingestArtifact: IngestArtifact;
+  readonly indexRun: IndexRun;
   readonly scanRepo: ScanRepo;
   readonly recordError: RecordError;
 }) => {
-  const { cfg, source, results, ingestArtifact, scanRepo, recordError } = deps;
+  const { cfg, source, results, scanRepo, recordError } = deps;
+  const { indexRun, indexedArtifacts } = deps.indexRun;
   const ingestRepo = Effect.fn("Ingest.ingestRepo")(function* (
     repo: RepoRef,
     opts?: { readonly limit?: number; readonly branch?: string },
@@ -115,52 +116,12 @@ export const makeIngestRepo = (deps: {
       byRun.set(artifact.runId, group);
     }
     // A completed run never changes. Retry failed downloads from its indexed rows.
-    const artifactsOf = Effect.fn("Ingest.artifactsOf")(function* (run: RunMeta) {
-      if (!seen.has(run.runId)) return byRun.get(run.runId) ?? [];
-      const rows = yield* results.artifactsOfRun(run.owner, run.repo, run.runId);
-      return rows
-        .filter((r) => r.state === "listed")
-        .map((r): ArtifactMeta => ({
-          artifactId: r.artifactId,
-          owner: r.owner,
-          repo: r.repo,
-          runId: r.runId,
-          name: r.name,
-          sizeBytes: r.sizeBytes,
-          ...(r.expiresAt ? { expiresAt: r.expiresAt } : {}),
-        }));
-    });
     const ingestRun = Effect.fn("Ingest.ingestRun")(function* (run: RunMeta) {
       const fresh = !seen.has(run.runId);
       if (fresh && artifacts === undefined) return;
-      const listed = yield* artifactsOf(run);
+      const listed = fresh ? (byRun.get(run.runId) ?? []) : yield* indexedArtifacts(run);
       if (!fresh && listed.length === 0) return;
-      acc.runs++;
-      if (fresh) {
-        for (const artifact of listed) {
-          yield* results.upsertArtifact({
-            artifactId: artifact.artifactId,
-            owner: artifact.owner,
-            repo: artifact.repo,
-            runId: artifact.runId,
-            name: artifact.name,
-            sizeBytes: artifact.sizeBytes,
-            expiresAt: artifact.expiresAt ?? null,
-            state: artifact.expired ? "expired" : "listed",
-            cachedAt: null,
-          });
-        }
-        yield* results.markRunSeen(run.owner, run.repo, run.runId);
-      }
-      for (const artifact of listed) {
-        acc.artifacts++;
-        if (artifact.expired) continue;
-        yield* ingestArtifact(run, artifact, acc).pipe(
-          Effect.catchCause((c) => {
-            return recordError(acc.errors, `${run.runId}/${artifact.name}: ${String(c)}`);
-          }),
-        );
-      }
+      yield* indexRun(run, listed, fresh, acc);
     });
     // A few runs at a time: GitHub's secondary limits frown on a burst of parallel calls.
     yield* Effect.forEach(
