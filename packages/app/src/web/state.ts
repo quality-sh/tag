@@ -35,6 +35,7 @@ export type Route =
   | ({ page: "view" } & View)
   | ({ page: "group"; key: string } & View)
   | { page: "collections" }
+  | { page: "onboarding" }
   | { page: "report"; reportId: string }
   | { page: "test"; owner: string; repo: string; testId: string };
 
@@ -54,6 +55,7 @@ export function parseRoute(hash: string): Route {
   if (parts[0] === "test" && parts[1] && parts[2] && parts[3])
     return { page: "test", owner: parts[1], repo: parts[2], testId: parts[3] };
   if (parts[0] === "collections") return { page: "collections" };
+  if (parts[0] === "onboarding") return { page: "onboarding" };
   const scoped = (scope: Scope): Route => {
     const { q, range } = view(undefined);
     return { page: "scope", scope, q, range };
@@ -100,6 +102,7 @@ export const href = {
   group: (by: GroupBy, key: string, v: Partial<View> = {}) =>
     `#/g/${by}/${encodeURIComponent(key)}${viewSearch(v)}`,
   collections: () => "#/collections",
+  onboarding: () => "#/onboarding",
   report: (id: string) => `#/report/${encodeURIComponent(id)}`,
   test: (owner: string, repo: string, testId: string) =>
     `#/test/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${encodeURIComponent(testId)}`,
@@ -231,6 +234,19 @@ export const ingestFn = runtime.fn(() => checkForNewRuns()).pipe(Atom.keepAlive)
 export const repositoriesAtom = runtime
   .atom(withApi((api) => api.repositories()))
   .pipe(Atom.withReactivity(keys.runs), Atom.keepAlive);
+
+/** Every repository with reports, and how many; first load reads it to pick the page. */
+export const reposAtom = runtime
+  .atom(withApi((api) => api.repos()))
+  .pipe(Atom.withReactivity(keys.runs));
+
+/** A repository's reports, newest first; the onboarding page finds the first one in them. */
+export const repoRunsAtom = Atom.family((key: string) => {
+  const [owner = "", repo = ""] = key.split("/");
+  return runtime
+    .atom(withApi((api) => api.runs({ owner, repo })))
+    .pipe(Atom.withReactivity(keys.runs));
+});
 
 /** Re-read every run-derived atom, as a backfill lands reports without a check. */
 export const refreshRunsFn = runtime.fn(() => Reactivity.invalidate(keys.runs));
