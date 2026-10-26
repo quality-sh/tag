@@ -13,6 +13,7 @@ import { addAuthRoutes, requireSession } from "./http-auth-routes.ts";
 import { addOperationalRoutes } from "./http-operational-routes.ts";
 import { addReadRoutes } from "./http-read-routes.ts";
 import { addCollectionRoutes } from "./http-collection-routes.ts";
+import { addSuggestionRoutes } from "./http-suggestion-routes.ts";
 
 export const ApiRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
@@ -29,6 +30,7 @@ export const ApiRoutes = HttpRouter.use((router) =>
     yield* addOperationalRoutes({ router, cfg, ingest, retention, results });
     yield* addReadRoutes({ router, results });
     yield* addCollectionRoutes({ router, results, auth, cfg });
+    yield* addSuggestionRoutes({ router, results });
   }),
 );
 

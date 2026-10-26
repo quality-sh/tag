@@ -16,3 +16,6 @@ export { indexValues, suggest } from "./grouping/suggest.ts";
 export type { Suggestion } from "./grouping/suggest.ts";
 export { computeOverview } from "./grouping/overview.ts";
 export type { RecentRun, RepoOverview } from "./grouping/overview.ts";
+export { ReleaseGroup } from "./grouping/release-groups.ts";
+export { OrgSuggestion, suggestFor } from "./grouping/lockstep.ts";
+export type { LockstepInput } from "./grouping/lockstep.ts";
