@@ -44,6 +44,10 @@ CREATE TABLE IF NOT EXISTS repo_scan (
   classification TEXT, reporting TEXT, unread TEXT, runners TEXT, names TEXT, scanned_at TEXT,
   PRIMARY KEY (owner, repo)
 );
+CREATE TABLE IF NOT EXISTS repo_proposal (
+  owner TEXT NOT NULL, repo TEXT NOT NULL, number INTEGER NOT NULL, url TEXT NOT NULL,
+  state TEXT NOT NULL, branch TEXT NOT NULL, opened_at TEXT NOT NULL, PRIMARY KEY (owner, repo)
+);
 CREATE TABLE IF NOT EXISTS report_tags (report_id TEXT NOT NULL, tag TEXT NOT NULL, PRIMARY KEY (report_id, tag));
 CREATE INDEX IF NOT EXISTS report_tags_tag ON report_tags(tag);
 CREATE TABLE IF NOT EXISTS refs (

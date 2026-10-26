@@ -112,6 +112,17 @@ export interface ScanRow {
   readonly scannedAt: string | null;
 }
 
+/** The pull request TAG opened to propose a repository's CI change. */
+export interface ProposalRow {
+  readonly owner: string;
+  readonly repo: string;
+  readonly number: number;
+  readonly url: string;
+  readonly state: "open" | "closed" | "merged";
+  readonly branch: string;
+  readonly openedAt: string;
+}
+
 export interface RunFilter {
   readonly owner?: string;
   readonly repo?: string;
@@ -173,6 +184,12 @@ export interface Interface {
   /** Every scan row, for the routes that prefer a repository's own default branch. */
   readonly scans: () => Effect.Effect<ReadonlyArray<ScanRow>, DbError>;
   readonly scanOf: (owner: string, repo: string) => Effect.Effect<Option.Option<ScanRow>, DbError>;
+  /** The pull request proposed for a repository's CI change, when TAG opened one. */
+  readonly proposalOf: (
+    owner: string,
+    repo: string,
+  ) => Effect.Effect<Option.Option<ProposalRow>, DbError>;
+  readonly saveProposal: (row: ProposalRow) => Effect.Effect<void, DbError>;
   /** Every indexed artifact name of a repository, and whether a report came from it. */
   readonly artifactNames: (
     owner: string,

@@ -141,8 +141,16 @@ export const makeClient = (
           );
           const res = yield* read;
           if (res.status !== 403 && res.status !== 429) return res;
-          const now = yield* Clock.currentTimeMillis;
           const retryAfter = res.headers["retry-after"];
+          // Every GitHub answer carries a reset time; a 403 with allowance left and no
+          // retry-after is a refusal, such as a missing App permission, not a rate limit.
+          if (
+            res.status === 403 &&
+            retryAfter === undefined &&
+            res.headers["x-ratelimit-remaining"] !== "0"
+          )
+            return res;
+          const now = yield* Clock.currentTimeMillis;
           const seconds = headerNumber(retryAfter);
           const date =
             retryAfter !== undefined && /^[A-Za-z]/.test(retryAfter) ? Date.parse(retryAfter) : NaN;

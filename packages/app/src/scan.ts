@@ -40,7 +40,7 @@ const CONFIG_FILES: ReadonlyArray<readonly [Runner, (base: string) => boolean]> 
 ];
 
 /** Commands a `run:` step may hold, most specific first so `cargo nextest` wins over the rest. */
-const RUN_COMMANDS: ReadonlyArray<readonly [Runner, RegExp]> = [
+export const RUN_COMMANDS: ReadonlyArray<readonly [Runner, RegExp]> = [
   ["nextest", /\bcargo\s+nextest\b/],
   ["cargo test", /\bcargo\s+test\b/],
   ["go test", /\bgo\s+test\b/],

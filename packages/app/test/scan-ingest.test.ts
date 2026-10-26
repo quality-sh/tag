@@ -49,6 +49,12 @@ describe("ingest scan (fixtures-scan -> fs store -> sqlite)", () => {
           ],
         });
 
+        // The proposal fixtures, shaped on the repositories changed by hand: all needs-change.
+        for (const repo of ["bun-suite", "nextest-matrix", "polyglot", "web-suite"])
+          expect(Option.getOrNull(yield* results.scanOf("acme", repo))?.classification).toBe(
+            "needs-change",
+          );
+
         // A TAP artifact the adapters cannot read: unsupported, the name recorded.
         expect(Option.getOrNull(yield* results.scanOf("acme", "tap-only"))).toMatchObject({
           classification: "unsupported",

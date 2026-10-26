@@ -13,6 +13,8 @@ import { addAuthRoutes, requireSession } from "./http-auth-routes.ts";
 import { addOperationalRoutes } from "./http-operational-routes.ts";
 import { addReadRoutes } from "./http-read-routes.ts";
 import { addCollectionRoutes } from "./http-collection-routes.ts";
+import { addProposalRoutes } from "./http-proposal-routes.ts";
+import { ArtifactSource } from "./artifact-source.ts";
 
 export const ApiRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
@@ -22,6 +24,7 @@ export const ApiRoutes = HttpRouter.use((router) =>
     const auth = yield* Auth.Service;
     const cfg = yield* AppConfig.Service;
     const installation = yield* Installation.Service;
+    const source = yield* ArtifactSource.Service;
     // Background passes fork here: the scope lives as long as the server, not the request.
     const background = yield* Effect.scope;
 
@@ -29,6 +32,7 @@ export const ApiRoutes = HttpRouter.use((router) =>
     yield* addOperationalRoutes({ router, cfg, ingest, retention, results });
     yield* addReadRoutes({ router, results });
     yield* addCollectionRoutes({ router, results, auth, cfg });
+    yield* addProposalRoutes({ router, results, source });
   }),
 );
 

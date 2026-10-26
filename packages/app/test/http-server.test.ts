@@ -72,9 +72,13 @@ describe("the dashboard app", () => {
         scans: Record<string, { classification: string | null; defaultBranch: string | null }>;
       };
       expect(Object.keys(overview.scans).sort()).toEqual([
+        "acme/bun-suite",
+        "acme/nextest-matrix",
+        "acme/polyglot",
         "acme/quiet",
         "acme/scanrepo",
         "acme/tap-only",
+        "acme/web-suite",
         "acme/workflow-only",
       ]);
       expect(overview.scans["acme/quiet"]).toMatchObject({

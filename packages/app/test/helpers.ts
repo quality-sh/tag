@@ -1,9 +1,16 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { expect } from "bun:test";
+import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Context, Deferred, Effect, Layer, Option, Redacted } from "effect";
-import { HttpClient, HttpClientResponse, HttpRouter, HttpServer } from "effect/http";
+import {
+  HttpClient,
+  type HttpClientRequest,
+  HttpClientResponse,
+  HttpRouter,
+  HttpServer,
+} from "effect/http";
 import { BunHttpServer } from "@effect/platform-bun";
 import { AppConfig } from "../src/server/config.ts";
 import { ArtifactStore } from "../src/server/artifact-store.ts";
@@ -74,28 +81,50 @@ export const testLayer = async (
 
 export const run = <A, E>(effect: Effect.Effect<A, E, never>) => Effect.runPromise(effect);
 
-export type Hit = { method: string; url: URL; auth: string | undefined; etag: string | undefined };
+export type Hit = {
+  method: string;
+  url: URL;
+  auth: string | undefined;
+  etag: string | undefined;
+  /** The request's JSON body, when it sent one. */
+  body: unknown;
+};
+
+/** The JSON a request sent; undefined for none or for bytes that are not JSON. */
+const jsonBody = (request: HttpClientRequest.HttpClientRequest): unknown => {
+  if (request.body._tag !== "Uint8Array") return undefined;
+  try {
+    return JSON.parse(new TextDecoder().decode(request.body.body));
+  } catch {
+    return undefined;
+  }
+};
 
 /** A GitHub that answers from a table of path -> body, remembering every request. */
 export const fakeGithub = (
-  routes: Record<string, (url: URL, headers: Readonly<Record<string, string>>) => unknown>,
+  routes: Record<
+    string,
+    (url: URL, headers: Readonly<Record<string, string>>, request: Hit) => unknown
+  >,
 ) => {
   const hits: Hit[] = [];
   const client = HttpClient.make((request, url) =>
     Effect.sync(() => {
-      hits.push({
+      const hit: Hit = {
         method: request.method,
         url,
         auth: request.headers["authorization"],
         etag: request.headers["if-none-match"],
-      });
+        body: jsonBody(request),
+      };
+      hits.push(hit);
       const route = routes[url.pathname];
       if (!route)
         return HttpClientResponse.fromWeb(
           request,
           new Response(JSON.stringify({ message: "Not Found" }), { status: 404 }),
         );
-      const out = route(url, request.headers);
+      const out = route(url, request.headers, hit);
       return HttpClientResponse.fromWeb(
         request,
         out instanceof Response
@@ -206,6 +235,56 @@ export const serveApp = async (
     },
   };
 };
+
+/** Sign in, run one ingest pass to its end, and hand back a fetch with the session. */
+export const signInAndIngest = async (base: string) => {
+  const login = await fetch(`${base}/api/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ password: "test" }),
+  });
+  const cookie = login.headers.getSetCookie()[0]?.split(";")[0] ?? "";
+  const call = (path: string, method = "GET") =>
+    fetch(`${base}${path}`, {
+      method,
+      headers: { cookie, "content-type": "application/json" },
+      ...(method === "POST" ? { body: "{}" } : {}),
+    });
+  const { passId } = (await (await call("/api/ingest", "POST")).json()) as { passId: string };
+  for (let i = 0; i < 500; i++) {
+    const status = (await (await call("/api/ingest/status")).json()) as {
+      lastFinished: { passId: string } | null;
+    };
+    if (status.lastFinished?.passId === passId) break;
+    await Bun.sleep(10);
+  }
+  return call;
+};
+
+const root = new URL("../../../", import.meta.url).pathname;
+export const webRoot = join(root, "packages/app/dist");
+
+/** Build the dashboard bundle unless it is newer than every web source. */
+export async function buildWeb() {
+  const index = Bun.file(join(webRoot, "index.html"));
+  const source = join(root, "packages/app/src/web");
+  if (await index.exists()) {
+    const entries = await readdir(source, { recursive: true, withFileTypes: true });
+    const files = await Promise.all(
+      entries
+        .filter((entry) => entry.isFile())
+        .map((entry) => stat(join(entry.parentPath, entry.name))),
+    );
+    if (files.every((file) => file.mtimeMs < index.lastModified)) return;
+  }
+  const build = Bun.spawn(["bun", "run", "build:web"], {
+    cwd: root,
+    stdout: "inherit",
+    stderr: "inherit",
+    timeout: 15_000,
+  });
+  expect(await build.exited).toBe(0);
+}
 
 /** S3 config for the local RustFS from docker-compose; undefined when it is not reachable. */
 export const localS3 = async (): Promise<AppConfig.S3Config | undefined> => {

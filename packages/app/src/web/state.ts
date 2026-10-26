@@ -111,7 +111,12 @@ export const routeAtom = Atom.make<Route>(parseRoute(location.hash)).pipe(Atom.k
 
 export const runtime = Atom.runtime(apiLayer);
 
-const keys = { session: ["session"], runs: ["runs"], collections: ["collections"] } as const;
+const keys = {
+  session: ["session"],
+  runs: ["runs"],
+  collections: ["collections"],
+  proposals: ["proposals"],
+} as const;
 
 const withApi = <A, E>(f: (api: TagApi["Service"]) => Effect.Effect<A, E>) =>
   Effect.gen(function* () {
@@ -239,6 +244,20 @@ export const createCollectionFn = runtime.fn(
 export const deleteCollectionFn = runtime.fn(
   (id: string) => withApi((api) => api.deleteCollection(id)),
   { reactivityKeys: keys.collections },
+);
+
+/** A repository's proposed CI change, keyed `owner/repo`. */
+export const proposalAtom = Atom.family((key: string) => {
+  const [owner = "", repo = ""] = key.split("/");
+  return runtime
+    .atom(withApi((api) => api.proposal(owner, repo)))
+    .pipe(Atom.withReactivity(keys.proposals));
+});
+
+/** Ask TAG to open the proposal's pull request; the outcome carries the diff when refused. */
+export const openProposalFn = runtime.fn(
+  (arg: { owner: string; repo: string }) => withApi((api) => api.openProposal(arg.owner, arg.repo)),
+  { reactivityKeys: keys.proposals },
 );
 
 // The embedded artifact viewer on a report page.
