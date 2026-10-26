@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -130,12 +130,16 @@ export const serveApp = async (
     readonly overrides?: Partial<AppConfig.Interface>;
     /** The GitHub transport; its presence selects the GitHub source over the fixtures one. */
     readonly http?: Layer.Layer<HttpClient.HttpClient>;
+    /** A built dashboard; by default tests get a minimal placeholder page. */
+    readonly webRoot?: string;
   } = {},
 ): Promise<{ readonly base: string; readonly stop: () => Promise<void> }> => {
   const dir = await tmpDir();
-  const web = join(dir, "web");
-  await mkdir(web, { recursive: true });
-  await writeFile(join(web, "index.html"), "<!doctype html><title>tag</title>");
+  const web = opts.webRoot ?? join(dir, "web");
+  if (opts.webRoot === undefined) {
+    await mkdir(web, { recursive: true });
+    await writeFile(join(web, "index.html"), "<!doctype html><title>tag</title>");
+  }
   const config = Layer.succeed(
     AppConfig.Service,
     testConfig({ source: opts.http ? "github" : "fixtures", ...opts.overrides }),
@@ -198,6 +202,7 @@ export const serveApp = async (
     stop: async () => {
       await Effect.runPromise(Deferred.succeed(done, void 0)).catch(() => {});
       await exited;
+      await rm(dir, { recursive: true, force: true });
     },
   };
 };
