@@ -7,8 +7,10 @@ import { Auth, SESSION_COOKIE } from "./auth.ts";
 import { Installation } from "./installation.ts";
 import type { Ingest } from "./ingest.ts";
 import { json, query } from "./http-helpers.ts";
+import { WEBHOOK_PATH } from "./http-webhook-routes.ts";
 
-const PUBLIC_PATHS = new Set(["/api/health", "/api/login", "/api/session"]);
+// GitHub posts the webhook with no session; its signature stands in for one.
+const PUBLIC_PATHS = new Set(["/api/health", "/api/login", "/api/session", WEBHOOK_PATH]);
 
 const cookieOptions = (maxAgeSeconds: number) => ({
   httpOnly: true,

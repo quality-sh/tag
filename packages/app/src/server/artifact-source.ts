@@ -66,6 +66,8 @@ export interface Interface {
     repo: RepoRef,
     opts: { readonly limit: number; readonly branch?: string; readonly since?: string },
   ) => Effect.Effect<ReadonlyArray<RunMeta>, SourceError>;
+  /** One completed run by id, as `listRuns` would describe it. */
+  readonly run: (repo: RepoRef, runId: string) => Effect.Effect<RunMeta, SourceError>;
   readonly listArtifacts: (run: RunMeta) => Effect.Effect<ReadonlyArray<ArtifactMeta>, SourceError>;
   /** Repository listing for runs needing an index. An empty set checks only the newest page. */
   readonly listRepoArtifacts: (
@@ -214,6 +216,16 @@ export const makeFixtures = (dir: string): Interface => {
       catch: srcError("listRuns", `${repo.owner}/${repo.repo}`),
     });
 
+  const run = Effect.fn("Fixtures.run")(function* (repo: RepoRef, runId: string) {
+    const found = (yield* listRuns(repo, { limit: Infinity })).find((r) => r.runId === runId);
+    if (found) return found;
+    return yield* new SourceError({
+      operation: "run",
+      detail: `${repo.owner}/${repo.repo}/${runId}: no such run`,
+      status: 404,
+    });
+  });
+
   const listArtifacts = (run: RunMeta) =>
     Effect.tryPromise({
       try: async () => {
@@ -340,6 +352,7 @@ export const makeFixtures = (dir: string): Interface => {
     repos,
     repoInfo,
     listRuns,
+    run,
     listArtifacts,
     listRepoArtifacts,
     listRefs,

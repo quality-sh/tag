@@ -126,5 +126,10 @@ export const makePass = (deps: {
       return { passId: job.passId };
     });
 
-    return { start, ingest };
+    /** Wait for the pass running now, if any. */
+    const awaitActive = Effect.suspend(() =>
+      active ? Effect.asVoid(Deferred.await(active.done)) : Effect.void,
+    );
+
+    return { start, ingest, awaitActive };
   });

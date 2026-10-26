@@ -1,6 +1,6 @@
 // The config layer's GitHub auth choice, read from real environment variables.
 import { describe, expect, test } from "bun:test";
-import { ConfigProvider, Effect, Option } from "effect";
+import { ConfigProvider, Effect, Option, Redacted } from "effect";
 import { AppConfig } from "../src/server/config.ts";
 
 const read = (vars: Record<string, string>) =>
@@ -47,5 +47,23 @@ describe("AppConfig", () => {
     const cfg = await Effect.runPromise(read({ GITHUB_INSTALLATION_ID: "555" }));
     expect(Option.isNone(cfg.github)).toBe(true);
     expect(cfg.source).toBe("fixtures");
+  });
+
+  test("the webhook secret is optional and the poll defaults to ten minutes", async () => {
+    const bare = await Effect.runPromise(read({}));
+    expect(Option.isNone(bare.webhookSecret)).toBe(true);
+    expect(bare.ingestPollMinutes).toBe(10);
+
+    const empty = await Effect.runPromise(read({ GITHUB_WEBHOOK_SECRET: "" }));
+    expect(Option.isNone(empty.webhookSecret)).toBe(true);
+
+    const set = await Effect.runPromise(
+      read({ GITHUB_WEBHOOK_SECRET: "s3cret", INGEST_POLL_MINUTES: "0" }),
+    );
+    expect(Option.map(set.webhookSecret, Redacted.value)).toStrictEqual(Option.some("s3cret"));
+    expect(set.ingestPollMinutes).toBe(0);
+    expect((await Effect.runPromise(read({ INGEST_POLL_MINUTES: "-5" }))).ingestPollMinutes).toBe(
+      0,
+    );
   });
 });

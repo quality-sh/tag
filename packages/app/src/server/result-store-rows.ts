@@ -112,6 +112,16 @@ export interface ScanRow {
   readonly scannedAt: string | null;
 }
 
+/** A completed run a webhook delivery named, waiting for the queue worker. */
+export interface QueuedRun {
+  readonly owner: string;
+  readonly repo: string;
+  readonly runId: string;
+  readonly queuedAt: string;
+  readonly attempts: number;
+  readonly lastError: string | null;
+}
+
 export interface RunFilter {
   readonly owner?: string;
   readonly repo?: string;
@@ -206,6 +216,24 @@ export interface Interface {
   /** One key/value row; the GitHub App installation id lives here between boots. */
   readonly getSetting: (key: string) => Effect.Effect<Option.Option<string>, DbError>;
   readonly setSetting: (key: string, value: string) => Effect.Effect<void, DbError>;
+  /**
+   * Record a delivery and queue its run, both or neither. A delivery id seen before is a
+   * no-op; a run already queued stays queued once.
+   */
+  readonly queueRun: (
+    deliveryId: string | undefined,
+    run: Pick<QueuedRun, "owner" | "repo" | "runId">,
+  ) => Effect.Effect<{ readonly duplicate: boolean }, DbError>;
+  /** Every queued run, oldest first. */
+  readonly queuedRuns: () => Effect.Effect<ReadonlyArray<QueuedRun>, DbError>;
+  readonly dequeueRun: (
+    run: Pick<QueuedRun, "owner" | "repo" | "runId">,
+  ) => Effect.Effect<void, DbError>;
+  /** Count a failed attempt and keep its reason; returns the attempts so far. */
+  readonly failQueuedRun: (
+    run: Pick<QueuedRun, "owner" | "repo" | "runId">,
+    error: string,
+  ) => Effect.Effect<number, DbError>;
   /** Drop the index and rebuild it from reports/ in the artifact store. */
   readonly rebuild: () => Effect.Effect<
     { readonly reports: number },

@@ -34,6 +34,8 @@ than setting them to empty strings.
 | `ARTIFACT_PORT` | `3001` | Artifact server port. |
 | `ARTIFACT_COPY_POLICY` | `copy` | `copy` caches artifacts at ingest; `on-view` defers the copy until viewed. Other values mean `copy`. |
 | `ARTIFACT_RETENTION_DAYS` | `90` | Age window for cached artifacts. `0` disables the sweep; negative values are clamped to zero. |
+| `GITHUB_WEBHOOK_SECRET` | Unset | The App's webhook secret. Unset or empty, `POST /api/webhooks/github` answers 404. |
+| `INGEST_POLL_MINUTES` | `10` | Minutes between backstop ingest passes. `0` disables the poll; negative values are clamped to zero. |
 
 ## GitHub access
 
@@ -95,7 +97,31 @@ to the artifact port and keep it separate from the dashboard origin.
 
 Ingest runs at boot with a limit of 20 recent runs per repository. The dashboard's
 ingest button calls `POST /api/ingest`. The App install callback also starts a pass.
-There is no periodic ingest poll yet.
+A finished run reaches TAG through the App's webhook, and a poll every
+`INGEST_POLL_MINUTES` runs the same pass as boot as a backstop. The poll sends
+conditional requests, so an unchanged repository costs one `304` per page. Token
+mode has no webhook; there the poll is the only automatic path.
+
+### Webhook
+
+In the App's settings, under Webhook:
+
+- Webhook URL: the dashboard's `/api/webhooks/github`, for example
+  `https://tag.example.com/api/webhooks/github`. It needs no session.
+- Secret: a long random value, also set as `GITHUB_WEBHOOK_SECRET`.
+- Content type: `application/json`.
+- Events: subscribe to **Workflow run** (`workflow_run`). The App's Actions read
+  permission makes it available.
+
+TAG checks the `X-Hub-Signature-256` signature against the secret and answers
+401 to a bad one. A `workflow_run` delivery with action `completed` queues its run
+in SQLite and answers 200 at once; other events and actions get 200 and are
+ignored, as do repositories outside a non-empty `GITHUB_REPOS`. A redelivery of a
+known `X-GitHub-Delivery` id changes nothing. A worker ingests queued runs one at a
+time per repository, never alongside a pass on that repository. A failed run is
+retried with backoff and dropped after five attempts. Queued runs survive a
+restart. A delivery GitHub never sent, or a run dropped after its attempts, is
+picked up by the next poll.
 
 ## Docker
 

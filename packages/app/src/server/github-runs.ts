@@ -12,8 +12,21 @@ import {
   WorkflowRuns,
 } from "./github-schemas.ts";
 
+const toRunMeta = (repo: RepoRef, r: typeof WorkflowRun.Type): RunMeta => ({
+  ...repo,
+  runId: String(r.id),
+  runNumber: r.run_number,
+  ...(r.name ? { workflow: r.name } : {}),
+  ...(r.head_branch ? { branch: r.head_branch } : {}),
+  commit: r.head_sha,
+  buildUrl: r.html_url,
+  timestamp: r.run_started_at ?? r.created_at,
+  status: r.conclusion ?? r.status ?? "completed",
+  ...(r.event ? { tags: [`event:${r.event}`] } : {}),
+});
+
 export const makeRunListing = (client: Client) => {
-  const { base, api, request, token, pages, repoPath } = client;
+  const { base, api, request, token, getJson, pages, repoPath } = client;
   // Cache each representation, including page, branch and limit. Revalidate on every pass.
   // Keeping the body lets ingest retry indexed downloads even when the runs have not changed.
   const runPages = new Map<string, { etag: string; body: typeof WorkflowRuns.Type }>();
@@ -60,18 +73,16 @@ export const makeRunListing = (client: Client) => {
         if (chunk.length < RUN_CAP || oldest === undefined || oldest === upToDay) break;
         upToDay = oldest;
       }
-      return runs.map((r): RunMeta => ({
-        ...repo,
-        runId: String(r.id),
-        runNumber: r.run_number,
-        ...(r.name ? { workflow: r.name } : {}),
-        ...(r.head_branch ? { branch: r.head_branch } : {}),
-        commit: r.head_sha,
-        buildUrl: r.html_url,
-        timestamp: r.run_started_at ?? r.created_at,
-        status: r.conclusion ?? r.status ?? "completed",
-        ...(r.event ? { tags: [`event:${r.event}`] } : {}),
-      }));
+      return runs.map((r) => toRunMeta(repo, r));
+    }),
+    run: Effect.fn("GitHubSource.run")(function* (repo: RepoRef, runId: string) {
+      const r = yield* getJson(
+        `${repoPath(repo)}/actions/runs/${encodeURIComponent(runId)}`,
+        WorkflowRun,
+        "run",
+        `${repo.owner}/${repo.repo}/${runId}`,
+      );
+      return toRunMeta(repo, r);
     }),
     listArtifacts: Effect.fn("GitHubSource.listArtifacts")(function* (run: RunMeta) {
       const list = yield* pages(
