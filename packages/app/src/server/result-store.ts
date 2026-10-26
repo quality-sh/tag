@@ -13,6 +13,7 @@ import { makeArtifacts } from "./result-store-artifacts.ts";
 import { makeRepositories } from "./result-store-repositories.ts";
 import { makeReports } from "./result-store-reports.ts";
 import { makeCollections } from "./result-store-collections.ts";
+import { makeProposals } from "./result-store-proposals.ts";
 import { makeSuggestionStore } from "./result-store-suggestions.ts";
 import { makeRebuild } from "./result-store-rebuild.ts";
 import { makeQueue } from "./result-store-queue.ts";
@@ -32,6 +33,7 @@ export const make = (db: Database, store: ArtifactStore.Interface): Interface =>
     ...makeRepositories(db),
     ...makeReports(db),
     ...makeCollections(db),
+    ...makeProposals(db),
     ...makeQueue(db),
     ...makeSuggestionStore(db),
     ...makeRebuild(db, store, indexReport),

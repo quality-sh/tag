@@ -10,6 +10,7 @@ import { makeClient } from "./github-client.ts";
 import { makeRunListing } from "./github-runs.ts";
 import { makeRefs } from "./github-refs.ts";
 import { makeRepoReads } from "./github-repo.ts";
+import { makeRepoWrites } from "./github-write.ts";
 import { InstallationRepos, PAGE } from "./github-schemas.ts";
 
 export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig) {
@@ -18,6 +19,7 @@ export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig)
   const { listRuns, run, listArtifacts, listRepoArtifacts, openArtifact } = makeRunListing(client);
   const { listRefs } = makeRefs(client);
   const { repoInfo, repoTree, repoFiles } = makeRepoReads(client);
+  const { openPullRequest } = makeRepoWrites(client);
 
   const repos = Effect.fn("GitHubSource.repos")(function* () {
     if (cfg.repos.length) return cfg.repos;
@@ -50,6 +52,7 @@ export const make = Effect.fn("GitHubSource.make")(function* (cfg: GithubConfig)
     repoTree,
     repoFiles,
     openArtifact,
+    openPullRequest,
   };
   return source;
 });

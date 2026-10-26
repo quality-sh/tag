@@ -1,0 +1,26 @@
+name: Review assets
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  assets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: sfw pnpm install --frozen-lockfile
+      - run: pnpm package:review
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm build-storybook
+      - run: pnpm build:review-fixture && pnpm exec playwright test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: provenance-review-${{ github.sha }}
+          path: artifacts/*
+          if-no-files-found: error

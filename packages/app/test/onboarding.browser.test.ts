@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import { generateKeyPairSync, randomUUID } from "node:crypto";
-import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { Option, Redacted } from "effect";
 import { chromium, expect as expectPage } from "playwright/test";
@@ -8,31 +7,7 @@ import { validateReport } from "@quality-sh/tag-schema";
 import type { GithubConfig } from "../src/server/config.ts";
 import { buildZip } from "../src/server/zip.ts";
 import { run } from "./github-fixtures.ts";
-import { fakeGithub, FIXTURES, serveApp } from "./helpers.ts";
-
-const root = new URL("../../../", import.meta.url).pathname;
-const webRoot = join(root, "packages/app/dist");
-
-async function buildWeb() {
-  const index = Bun.file(join(webRoot, "index.html"));
-  const source = join(root, "packages/app/src/web");
-  if (await index.exists()) {
-    const entries = await readdir(source, { recursive: true, withFileTypes: true });
-    const files = await Promise.all(
-      entries
-        .filter((entry) => entry.isFile())
-        .map((entry) => stat(join(entry.parentPath, entry.name))),
-    );
-    if (files.every((file) => file.mtimeMs < index.lastModified)) return;
-  }
-  const build = Bun.spawn(["bun", "run", "build:web"], {
-    cwd: root,
-    stdout: "inherit",
-    stderr: "inherit",
-    timeout: 15_000,
-  });
-  expect(await build.exited).toBe(0);
-}
+import { buildWeb, fakeGithub, FIXTURES, serveApp, webRoot } from "./helpers.ts";
 
 test("onboarding installs GitHub, backfills three runs and opens the first report", async () => {
   await buildWeb();

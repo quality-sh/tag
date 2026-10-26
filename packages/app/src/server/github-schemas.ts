@@ -97,3 +97,14 @@ export const PAGE = 100;
 /** GitHub stops paging a run listing here; a longer walk narrows its date window. */
 export const RUN_CAP = 1000;
 export const SHA = /^[0-9a-f]{40}$/;
+
+export const GitRef = Schema.Struct({ object: Schema.Struct({ sha: Schema.String }) });
+export const ContentSha = Schema.Struct({ sha: Schema.String });
+export const OpenedPull = Schema.Struct({
+  number: Schema.Number,
+  html_url: Schema.String,
+  state: Schema.String,
+  merged_at: Nullable(Schema.String),
+});
+export const OpenedPulls = Schema.Array(OpenedPull);
+export const GitHubMessage = Schema.Struct({ message: Schema.optionalKey(Schema.String) });

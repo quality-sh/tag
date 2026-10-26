@@ -1,0 +1,55 @@
+name: Tests
+on: [push, pull_request]
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.12", "3.13"]
+        include:
+          - python: "3.13"
+            experimental: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -r requirements.txt pytest
+      - name: Unit tests
+        run: |
+          python -m pytest \
+            -q tests/unit
+        env:
+          PYTHONHASHSEED: "0"
+      - name: Evals
+        run: deepeval test run evals/test_answers.py # needs the judge key
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+      - run: go vet ./... && go test -race ./...
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - name: Jest
+        run: npx jest --ci
+        working-directory: web
+      - run: npm run mocha:unit
+
+  legacy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: yarn install --frozen-lockfile && yarn build
+      - run: "yarn mocha test/legacy"

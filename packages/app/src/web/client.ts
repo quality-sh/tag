@@ -169,6 +169,28 @@ export interface RepoScan {
   runners: Array<{ runner: string; job: string | null; command: string | null }>;
   scannedAt: string | null;
 }
+/** The pull request TAG opened for a repository's CI change. */
+export interface ProposedPullRequest {
+  number: number;
+  url: string;
+  state: "open" | "closed" | "merged";
+  branch: string;
+}
+/** The CI change TAG proposes for a needs-change repository. */
+export interface Proposal {
+  owner: string;
+  repo: string;
+  title: string;
+  description: string;
+  files: Array<{ path: string; diff: string; created: boolean }>;
+  notes: string[];
+  pullRequest: ProposedPullRequest | null;
+}
+/** What asking for the pull request did: opened it, or was refused and gives the diff. */
+export interface ProposalOutcome extends Proposal {
+  outcome: "opened" | "denied";
+  reason?: string;
+}
 export interface OverviewPage {
   range: Range;
   query: string;
@@ -257,9 +279,20 @@ export interface Interface {
     input: typeof CollectionInput.Type,
   ) => Effect.Effect<Collection, ApiError | Unauthorized>;
   readonly deleteCollection: (id: string) => Effect.Effect<void, ApiError | Unauthorized>;
+  readonly proposal: (
+    owner: string,
+    repo: string,
+  ) => Effect.Effect<Proposal, ApiError | Unauthorized>;
+  readonly openProposal: (
+    owner: string,
+    repo: string,
+  ) => Effect.Effect<ProposalOutcome, ApiError | Unauthorized>;
 }
 
 export class TagApi extends Context.Service<TagApi, Interface>()("@tag/web/Api") {}
+
+const proposalPath = (owner: string, repo: string) =>
+  `/api/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/proposal`;
 
 const make = Effect.gen(function* () {
   const client = yield* HttpClient.HttpClient;
@@ -354,6 +387,9 @@ const make = Effect.gen(function* () {
         Effect.flatMap((res) => read<{ ok: boolean }>(res)),
         Effect.asVoid,
       ),
+    proposal: (owner, repo) => get<Proposal>(proposalPath(owner, repo)),
+    openProposal: (owner, repo) =>
+      post<ProposalOutcome>(`${proposalPath(owner, repo)}/pull-request`, {}),
   });
 });
 

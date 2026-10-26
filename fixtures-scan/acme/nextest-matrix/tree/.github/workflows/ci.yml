@@ -1,0 +1,35 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.changes.outputs.test-matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
+        with:
+          toolchain: stable
+      - name: Install nextest
+        uses: taiki-e/install-action@c3ec0de9ae7f1019cea21aa96aa0a895b9552063 # v2
+        with:
+          tool: nextest@0.9.143
+      - name: Test concurrently
+        if: runner.os != 'Linux'
+        run: cargo nextest run --profile ci --workspace --all-features --no-fail-fast --cargo-profile test --timings
+      - name: Test documentation
+        run: cargo test --workspace --all-features --doc --no-fail-fast
+      - name: Save Cargo timing reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cargo-timings-test-${{ matrix.os }}
+          path: target/cargo-timings/*.html
+          if-no-files-found: warn
+          retention-days: 30

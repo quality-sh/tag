@@ -1,0 +1,6 @@
+[profile.ci]
+# Bound process concurrency even when the runner receives extra CPUs.
+test-threads = 8
+
+[test-groups.cargo]
+max-threads = 1

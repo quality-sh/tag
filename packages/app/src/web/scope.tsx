@@ -24,6 +24,7 @@ import type { OverviewPage as Overview, RepositoryState } from "./client.ts";
 import { InstallLink, Loaded, SignOut, cap } from "./common.tsx";
 import { GroupsTable, Rail, Search, scopeCrumbs } from "./home.tsx";
 import { Repository } from "./overview.tsx";
+import { ProposalSection } from "./proposal.tsx";
 import { SuggestionCards } from "./suggestions.tsx";
 import {
   groupsAtom,
@@ -145,6 +146,9 @@ export function ScopePage({ scope, q, range }: { scope: Scope; q: string; range:
           label={`Filter ${scope.kind === "repo" ? `${scope.owner}/${scope.repo}` : title}`}
           onQuery={(next) => go(href.scope(scope, { q: next, range }))}
         />
+        {scope.kind === "repo" && (
+          <ProposalSection scan={data?.scans[`${scope.owner}/${scope.repo}`]} />
+        )}
         <Loaded result={result}>
           {(d) => <Repositories d={d} range={range} states={backfilling} />}
         </Loaded>

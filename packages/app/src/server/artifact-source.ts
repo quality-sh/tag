@@ -15,6 +15,12 @@ export class SourceError extends Schema.TaggedError<SourceError>()("ArtifactSour
   cause: Schema.optionalKey(Schema.Defect()),
 }) {}
 
+/** GitHub refused a write for want of a permission; nothing the write began is left behind. */
+export class WriteDenied extends Schema.TaggedError<WriteDenied>()("ArtifactSource.WriteDenied", {
+  detail: Schema.String,
+  status: Schema.optionalKey(Schema.Number),
+}) {}
+
 export interface RepoRef {
   readonly owner: string;
   readonly repo: string;
@@ -51,6 +57,21 @@ export interface RepoInfo {
   readonly environments: ReadonlyArray<string>;
 }
 
+/** A change to propose: the branch to push, the files it writes, and the pull request text. */
+export interface PullRequestDraft {
+  readonly branch: string;
+  readonly title: string;
+  readonly body: string;
+  readonly files: ReadonlyArray<{ readonly path: string; readonly text: string }>;
+}
+
+export interface PullRequestRef {
+  readonly number: number;
+  readonly url: string;
+  readonly state: "open" | "closed" | "merged";
+  readonly branch: string;
+}
+
 export interface Interface {
   readonly kind: "fixtures" | "github";
   /** Cumulative rate-limit waits and the last reported request allowance. */
@@ -85,6 +106,11 @@ export interface Interface {
   ) => Effect.Effect<ReadonlyArray<{ path: string; text: string }>, SourceError>;
   /** The artifact as zip bytes. */
   readonly openArtifact: (artifact: ArtifactMeta) => Effect.Effect<Uint8Array, SourceError>;
+  /** Branch from the default branch, write the files there, and open a pull request. */
+  readonly openPullRequest: (
+    repo: RepoRef,
+    draft: PullRequestDraft,
+  ) => Effect.Effect<PullRequestRef, SourceError | WriteDenied>;
 }
 
 export class Service extends Context.Service<Service, Interface>()("@tag/ArtifactSource") {}
@@ -346,6 +372,13 @@ export const makeFixtures = (dir: string): Interface => {
       catch: srcError("openArtifact", artifact.artifactId),
     });
 
+  const openPullRequest = (repo: RepoRef) =>
+    Effect.fail(
+      new WriteDenied({
+        detail: `${repo.owner}/${repo.repo}: TAG reads fixtures here; there is no GitHub App to open a pull request with`,
+      }),
+    );
+
   return {
     kind: "fixtures",
     requestStats: () => Effect.succeed({ waits: 0, remaining: null }),
@@ -359,6 +392,7 @@ export const makeFixtures = (dir: string): Interface => {
     repoTree,
     repoFiles,
     openArtifact,
+    openPullRequest,
   };
 };
 

@@ -267,6 +267,11 @@ const blocks = stylex.create({
   },
 });
 
+/** A paragraph of serif prose in a section's body, as its lede is above it. */
+export function Prose({ children }: { children: ReactNode }) {
+  return <p {...stylex.props(type.prose)}>{children}</p>;
+}
+
 export function Message({ children }: { children: ReactNode }) {
   return <p {...stylex.props(blocks.message)}>{children}</p>;
 }
