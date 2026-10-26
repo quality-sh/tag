@@ -102,7 +102,8 @@ test("onboarding installs GitHub, backfills three runs and opens the first repor
       const page = await browser.newPage();
       page.setDefaultTimeout(5000);
       await page.goto(app.base);
-      const install = page.getByRole("link", { name: "install on GitHub", exact: true });
+      await expectPage(page).toHaveURL(/#\/onboarding$/);
+      const install = page.getByRole("link", { name: "Install on GitHub", exact: true });
       await expectPage(install).toBeVisible();
       await expectPage(install).toHaveAttribute("href", "/api/install");
 
@@ -118,7 +119,12 @@ test("onboarding installs GitHub, backfills three runs and opens the first repor
         .filter({ hasText: "acme/widgets: backfilling, 0 of 3" });
       await expectPage(progress).toBeVisible();
       download.resolve();
+      await expectPage(
+        page.getByText("The first report is in: 6 tests from playwright in acme/widgets."),
+      ).toBeVisible();
 
+      // The overview is one hash change away, so no reload sends the page back to onboarding.
+      await page.getByRole("link", { name: "overview", exact: true }).click();
       await expectPage(
         page.getByRole("link", { name: "acme/widgets →", exact: true }),
       ).toBeVisible();
