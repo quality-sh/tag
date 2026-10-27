@@ -28,14 +28,45 @@ than setting them to empty strings.
 | `GITHUB_API_URL` | `https://api.github.com` | API base URL; for GHES use `https://ghe.example.com/api/v3`. Read with GitHub credentials. |
 | `GITHUB_APP_SLUG` | Unset | App URL slug for the install link. Read with GitHub credentials. |
 | `GITHUB_REPOS` | Empty string | Comma-separated `owner/repo` list. Empty lets an App use all installed repositories. Read with GitHub credentials. |
-| `TAG_PASSWORD` | Empty string | Shared viewer password. Empty disables viewer auth. |
-| `SESSION_SECRET` | `dev-only-secret` | Signs sessions, artifact handoffs and install state. Set a private value for deployment. |
+| `TAG_PASSWORD` | Empty string | Shared viewer password. Empty turns it off; with OIDC also off, viewer auth is off. |
+| `SESSION_SECRET` | `dev-only-secret` | Signs sessions, artifact handoffs, install state and the OIDC flow. Set a private value for deployment. |
+| `OIDC_ISSUER` | Unset | OIDC provider's issuer URL. With the client id and secret, turns on OIDC login. |
+| `OIDC_CLIENT_ID` | Unset | OIDC client id. |
+| `OIDC_CLIENT_SECRET` | Unset | OIDC client secret. |
+| `OIDC_ALLOWED_DOMAINS` | Empty string | Comma-separated email domains allowed in. Empty allows any verified email. |
+| `OIDC_PROVIDER_NAME` | `SSO` | Name on the "Sign in with" button. |
+| `PUBLIC_URL` | `http://localhost:${PORT}` | The dashboard's public origin; it builds the OIDC redirect URI. |
 | `PORT` | `3000` | Dashboard and API port. |
 | `ARTIFACT_PORT` | `3001` | Artifact server port. |
 | `ARTIFACT_COPY_POLICY` | `copy` | `copy` caches artifacts at ingest; `on-view` defers the copy until viewed. Other values mean `copy`. |
 | `ARTIFACT_RETENTION_DAYS` | `90` | Age window for cached artifacts. `0` disables the sweep; negative values are clamped to zero. |
 | `GITHUB_WEBHOOK_SECRET` | Unset | The App's webhook secret. Unset or empty, `POST /api/webhooks/github` answers 404. |
 | `INGEST_POLL_MINUTES` | `10` | Minutes between backstop ingest passes. `0` disables the poll; negative values are clamped to zero. |
+
+## OIDC login
+
+TAG can sign viewers in through any OpenID Connect provider, such as Google,
+WorkOS, Okta or Microsoft Entra ID, beside or instead of `TAG_PASSWORD`. Register
+a web application with the provider and set:
+
+```sh
+OIDC_ISSUER=https://accounts.google.com   # discovery at <issuer>/.well-known/openid-configuration
+OIDC_CLIENT_ID=...
+OIDC_CLIENT_SECRET=...
+OIDC_ALLOWED_DOMAINS=example.com          # optional; empty lets in any verified email
+OIDC_PROVIDER_NAME=Google                 # optional; the button reads "Sign in with Google"
+PUBLIC_URL=https://tag.example.com
+```
+
+Register `${PUBLIC_URL}/api/auth/oidc/callback` as the redirect URI, for example
+`https://tag.example.com/api/auth/oidc/callback`. TAG asks for the `openid email
+profile` scopes and uses the authorization code flow with PKCE.
+
+TAG checks the ID token's signature against the provider's JWKS, and its issuer,
+audience, expiry and nonce. It lets in only an email the provider marks verified
+(`email_verified`), in one of `OIDC_ALLOWED_DOMAINS` when that is set. The viewer
+then gets the same session cookie the password gives. With both set, the login
+page offers both; with only OIDC set, it hides the password field.
 
 ## GitHub access
 
@@ -142,7 +173,7 @@ The image sets `DATA_DIR=/data` and declares it as a volume. Leave `SQLITE_PATH`
 unset to keep the index there. A bind mount must be writable by the image's `bun`
 user. If you change `DATA_DIR`, mount the new path too.
 
-Create `.env.deploy` with your GitHub mode, `TAG_PASSWORD` and `SESSION_SECRET`.
+Create `.env.deploy` with your GitHub mode, `TAG_PASSWORD` or the OIDC settings, and `SESSION_SECRET`.
 Add the S3 variables to use a bucket; otherwise the volume holds files too. For
 local RustFS, the endpoint must be reachable from the container: `localhost` there
 is the TAG container, not the host. Fixture mode needs a mounted fixture directory
