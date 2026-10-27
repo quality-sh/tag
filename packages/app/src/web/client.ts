@@ -129,6 +129,12 @@ export type HistoryRow = TestRow & { metrics: MetricRow[] };
 export interface Session {
   authenticated: boolean;
   authRequired: boolean;
+  /** The shared password is set, so the login page offers it. */
+  passwordLogin?: boolean;
+  /** The OIDC provider's name for the sign-in button, when OIDC is configured. */
+  oidcProvider?: string;
+  /** The signed-in viewer's email, for an OIDC session. */
+  email?: string;
   /** The App's "Install on GitHub" link, when App credentials and a slug are configured. */
   installUrl?: string;
 }

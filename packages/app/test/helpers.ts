@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Context, Deferred, Effect, Layer, Option, Redacted } from "effect";
 import {
+  FetchHttpClient,
   HttpClient,
   type HttpClientRequest,
   HttpClientResponse,
@@ -21,6 +22,7 @@ import { ResultStore } from "../src/server/result-store.ts";
 import { Ingest } from "../src/server/ingest.ts";
 import { Retention } from "../src/server/retention.ts";
 import { Auth } from "../src/server/auth.ts";
+import { Oidc } from "../src/server/oidc.ts";
 import { App } from "../src/server/http.ts";
 
 export const FIXTURES = new URL("../../../fixtures/", import.meta.url).pathname;
@@ -34,6 +36,7 @@ export const testConfig = (overrides: Partial<AppConfig.Interface> = {}): AppCon
   github: Option.none(),
   password: Redacted.make("test"),
   sessionSecret: Redacted.make("test-secret"),
+  oidc: Option.none(),
   port: 0,
   artifactPort: 0,
   copyPolicy: "copy",
@@ -141,6 +144,20 @@ export const fakeGithub = (
   return { hits, layer: Layer.succeed(HttpClient.HttpClient, client) };
 };
 
+/** Auth and OIDC as production builds them; OIDC talks to providers over fetch. */
+export const authLayer = Oidc.layer.pipe(
+  Layer.provide(FetchHttpClient.layer),
+  Layer.provideMerge(Auth.layer),
+);
+
+/** A port free a moment ago, for a server whose URL its own config must name. */
+export const freePort = () => {
+  const probe = Bun.listen({ hostname: "127.0.0.1", port: 0, socket: { data() {} } });
+  const port = probe.port;
+  probe.stop(true);
+  return port;
+};
+
 /** Poll a real server's side effect; false when it never came true within `ms`. */
 export const eventually = async (f: () => boolean, ms = 5000): Promise<boolean> => {
   const end = Date.now() + ms;
@@ -163,6 +180,8 @@ export const serveApp = async (
     readonly http?: Layer.Layer<HttpClient.HttpClient>;
     /** A built dashboard; by default tests get a minimal placeholder page. */
     readonly webRoot?: string;
+    /** A fixed port, for config that must name the app's own URL; by default any free one. */
+    readonly port?: number;
   } = {},
 ): Promise<{
   readonly base: string;
@@ -195,7 +214,7 @@ export const serveApp = async (
     : ArtifactSource.layerFixtures(opts.overrides?.fixturesDir ?? FIXTURES);
   const ingest = Ingest.layer.pipe(Layer.provide(Layer.mergeAll(config, store, source, results)));
   const retention = Retention.layer.pipe(Layer.provide(Layer.mergeAll(config, store, results)));
-  const auth = Auth.layer.pipe(Layer.provide(config));
+  const auth = authLayer.pipe(Layer.provide(config));
   const services = Layer.mergeAll(
     config,
     store,
@@ -213,7 +232,7 @@ export const serveApp = async (
   // build. So the server tap only captures the listening address, and `ready` waits
   // for the whole served layer to be built: the first request always meets the app.
   const listening = Deferred.makeUnsafe<string>();
-  const bunServer = BunHttpServer.layer({ port: 0, hostname: "127.0.0.1" }).pipe(
+  const bunServer = BunHttpServer.layer({ port: opts.port ?? 0, hostname: "127.0.0.1" }).pipe(
     Layer.tap((ctx) =>
       Effect.gen(function* () {
         const server = Context.get(ctx, HttpServer.HttpServer);

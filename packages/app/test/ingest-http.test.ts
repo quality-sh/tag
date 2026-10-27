@@ -5,11 +5,10 @@ import { describe, expect, test } from "bun:test";
 import { Deferred, Effect, Layer } from "effect";
 import { HttpRouter } from "effect/http";
 import { ApiRoutes } from "../src/server/http.ts";
-import { Auth } from "../src/server/auth.ts";
 import { Retention } from "../src/server/retention.ts";
 import { Installation } from "../src/server/installation.ts";
 import { ArtifactSource } from "../src/server/artifact-source.ts";
-import { FIXTURES, testLayer } from "./helpers.ts";
+import { FIXTURES, authLayer, testLayer } from "./helpers.ts";
 
 describe("ingest pipeline (fixtures -> fs store -> sqlite)", () => {
   test("HTTP ingest returns 202, shares the active pass, and publishes each repository", async () => {
@@ -57,7 +56,7 @@ describe("ingest pipeline (fixtures -> fs store -> sqlite)", () => {
     const app = HttpRouter.toWebHandler(
       ApiRoutes.pipe(
         Layer.provide(
-          Layer.mergeAll(Auth.layer, Retention.layer, Installation.layer).pipe(
+          Layer.mergeAll(authLayer, Retention.layer, Installation.layer).pipe(
             Layer.provideMerge(layer),
           ),
         ),

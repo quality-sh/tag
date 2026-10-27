@@ -1,6 +1,6 @@
-// Viewer auth for the MVP: one shared password, exchanged for a signed session cookie.
-// The artifact origin gets its own cookie through a short-lived signed hand-off token.
-import { Context, Effect, Layer, Redacted } from "effect";
+// Viewer auth: a shared password, an OIDC provider, or both, each ending in the same signed
+// session cookie. The artifact origin gets its own cookie through a short-lived signed hand-off.
+import { Context, Effect, Layer, Option, Redacted } from "effect";
 import { AppConfig } from "./config.ts";
 
 export const SESSION_COOKIE = "tag_session";
@@ -10,17 +10,25 @@ const HANDOFF_TTL_MS = 60 * 1000;
 const INSTALL_TTL_MS = 10 * 60 * 1000;
 
 export interface Interface {
+  /** True when any sign-in is configured: the password, OIDC, or both. */
   readonly enabled: boolean;
+  /** True when the shared password is set and so offered on the login page. */
+  readonly passwordEnabled: boolean;
   readonly checkPassword: (password: string) => boolean;
-  /** A session token: "<expiresAtMs>.<hmac>" */
-  readonly issueSession: () => string;
+  /** A session token: "<expiresAtMs>[:<email>].<hmac>"; OIDC sessions carry the email. */
+  readonly issueSession: (email?: string) => string;
   readonly verifySession: (token: string | undefined) => boolean;
+  /** The email a valid OIDC session carries; undefined for a password session or none. */
+  readonly sessionEmail: (token: string | undefined) => string | undefined;
   /** One-minute token that the artifact origin exchanges for its own cookie. */
   readonly issueHandoff: () => string;
   readonly verifyHandoff: (token: string | undefined) => boolean;
   /** Ten-minute token carried through GitHub's install round trip and verified on the way back. */
   readonly issueInstallState: () => string;
   readonly verifyInstallState: (token: string | undefined) => boolean;
+  /** Sign `data` as `kind` for `ttlMs`; `open` gives it back while the token is valid. */
+  readonly seal: (kind: string, data: string, ttlMs: number) => string;
+  readonly open: (kind: string, token: string | undefined) => string | undefined;
 }
 
 export class Service extends Context.Service<Service, Interface>()("@tag/Auth") {}
@@ -38,40 +46,49 @@ const constantTimeEqual = (a: string, b: string): boolean => {
   return diff === 0;
 };
 
-/** Token checks that guard data, not a session: they hold whether or not a password is set. */
-const verifyToken = (secret: string, kind: string, token: string | undefined): boolean => {
-  if (!token) return false;
-  const dot = token.indexOf(".");
-  if (dot === -1) return false;
-  const exp = Number(token.slice(0, dot));
-  if (!Number.isFinite(exp) || exp < Date.now()) return false;
-  return constantTimeEqual(token.slice(dot + 1), hmac(secret, `${kind}.${exp}`));
+const toBase64Url = (s: string) => Buffer.from(s, "utf8").toString("base64url");
+const fromBase64Url = (s: string) => Buffer.from(s, "base64url").toString("utf8");
+
+const seal = (secret: string, kind: string, data: string, ttlMs: number): string => {
+  const exp = Date.now() + ttlMs;
+  // A token with no data keeps the old "<exp>.<hmac>" shape, so sessions survive an upgrade.
+  const payload = data === "" ? `${exp}` : `${exp}:${toBase64Url(data)}`;
+  return `${payload}.${hmac(secret, `${kind}.${payload}`)}`;
 };
 
-export const make = (password: string, secret: string): Interface => {
-  const enabled = password.length > 0;
-  const issue = (kind: string, ttl: number) => {
-    const exp = Date.now() + ttl;
-    return `${exp}.${hmac(secret, `${kind}.${exp}`)}`;
-  };
-  const verify = (kind: string, token: string | undefined): boolean => {
-    if (!enabled) return true;
-    if (!token) return false;
-    const dot = token.indexOf(".");
-    if (dot === -1) return false;
-    const exp = Number(token.slice(0, dot));
-    if (!Number.isFinite(exp) || exp < Date.now()) return false;
-    return constantTimeEqual(token.slice(dot + 1), hmac(secret, `${kind}.${exp}`));
-  };
+/** The sealed data of a valid token ("" when it carries none), or undefined. */
+const open = (secret: string, kind: string, token: string | undefined): string | undefined => {
+  if (!token) return undefined;
+  const dot = token.lastIndexOf(".");
+  if (dot === -1) return undefined;
+  const payload = token.slice(0, dot);
+  const colon = payload.indexOf(":");
+  const exp = Number(colon === -1 ? payload : payload.slice(0, colon));
+  if (!Number.isFinite(exp) || exp < Date.now()) return undefined;
+  if (!constantTimeEqual(token.slice(dot + 1), hmac(secret, `${kind}.${payload}`)))
+    return undefined;
+  return colon === -1 ? "" : fromBase64Url(payload.slice(colon + 1));
+};
+
+export const make = (password: string, secret: string, oidcEnabled = false): Interface => {
+  const passwordEnabled = password.length > 0;
+  const enabled = passwordEnabled || oidcEnabled;
+  // Session checks pass when no sign-in is configured; install and sealed tokens always guard.
+  const verify = (kind: string, token: string | undefined): boolean =>
+    !enabled || open(secret, kind, token) !== undefined;
   return {
     enabled,
-    checkPassword: (p) => enabled && constantTimeEqual(p, password),
-    issueSession: () => issue("session", SESSION_TTL_MS),
+    passwordEnabled,
+    checkPassword: (p) => passwordEnabled && constantTimeEqual(p, password),
+    issueSession: (email = "") => seal(secret, "session", email, SESSION_TTL_MS),
     verifySession: (t) => verify("session", t),
-    issueHandoff: () => issue("handoff", HANDOFF_TTL_MS),
+    sessionEmail: (t) => open(secret, "session", t) || undefined,
+    issueHandoff: () => seal(secret, "handoff", "", HANDOFF_TTL_MS),
     verifyHandoff: (t) => verify("handoff", t),
-    issueInstallState: () => issue("install", INSTALL_TTL_MS),
-    verifyInstallState: (t) => verifyToken(secret, "install", t),
+    issueInstallState: () => seal(secret, "install", "", INSTALL_TTL_MS),
+    verifyInstallState: (t) => open(secret, "install", t) !== undefined,
+    seal: (kind, data, ttlMs) => seal(secret, kind, data, ttlMs),
+    open: (kind, t) => open(secret, kind, t),
   };
 };
 
@@ -79,9 +96,19 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const cfg = yield* AppConfig.Service;
-    const auth = make(Redacted.value(cfg.password), Redacted.value(cfg.sessionSecret));
+    const auth = make(
+      Redacted.value(cfg.password),
+      Redacted.value(cfg.sessionSecret),
+      Option.isSome(cfg.oidc),
+    );
+    const modes = [
+      ...(auth.passwordEnabled ? ["shared password"] : []),
+      ...(Option.isSome(cfg.oidc) ? [`OIDC (${cfg.oidc.value.issuer})`] : []),
+    ];
     yield* Effect.logInfo(
-      auth.enabled ? "auth: shared password enabled" : "auth: DISABLED (set TAG_PASSWORD)",
+      auth.enabled
+        ? `auth: ${modes.join(" and ")} enabled`
+        : "auth: DISABLED (set TAG_PASSWORD or OIDC_ISSUER)",
     );
     return Service.of(auth);
   }),

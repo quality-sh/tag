@@ -28,6 +28,20 @@ export interface GithubConfig {
   readonly repos: ReadonlyArray<{ readonly owner: string; readonly repo: string }>;
 }
 
+/** Sign-in through any OpenID Connect provider, beside or instead of the shared password. */
+export interface OidcConfig {
+  /** Discovery lives at <issuer>/.well-known/openid-configuration. */
+  readonly issuer: string;
+  readonly clientId: string;
+  readonly clientSecret: Redacted.Redacted<string>;
+  /** Lower-case email domains; empty lets in any verified email. */
+  readonly allowedDomains: ReadonlyArray<string>;
+  /** The name on the sign-in button. */
+  readonly providerName: string;
+  /** The redirect URI to register with the provider, built from PUBLIC_URL. */
+  readonly redirectUri: string;
+}
+
 export interface Interface {
   readonly s3: Option.Option<S3Config>;
   readonly dataDir: string;
@@ -37,6 +51,8 @@ export interface Interface {
   readonly github: Option.Option<GithubConfig>;
   readonly password: Redacted.Redacted<string>;
   readonly sessionSecret: Redacted.Redacted<string>;
+  /** On when OIDC_ISSUER, OIDC_CLIENT_ID and OIDC_CLIENT_SECRET are all set. */
+  readonly oidc: Option.Option<OidcConfig>;
   readonly port: number;
   readonly artifactPort: number;
   /** Default policy for large artifacts: copy into the store at ingest, or only when first viewed. */
@@ -50,6 +66,36 @@ export interface Interface {
 }
 
 export class Service extends Context.Service<Service, Interface>()("@tag/AppConfig") {}
+
+const nonEmpty = (name: string) =>
+  Config.String(name).pipe(Config.option, Config.map(Option.filter((v) => v.trim() !== "")));
+
+const oidcConfig = (port: number) =>
+  Effect.gen(function* () {
+    const issuer = yield* nonEmpty("OIDC_ISSUER");
+    const clientId = yield* nonEmpty("OIDC_CLIENT_ID");
+    const clientSecret = Option.filter(
+      yield* Config.option(Config.Redacted("OIDC_CLIENT_SECRET")),
+      (secret) => Redacted.value(secret) !== "",
+    );
+    if (Option.isNone(issuer) || Option.isNone(clientId) || Option.isNone(clientSecret))
+      return Option.none<OidcConfig>();
+    const publicUrl = yield* Config.String("PUBLIC_URL").pipe(
+      Config.withDefault(`http://localhost:${port}`),
+    );
+    const domains = yield* Config.String("OIDC_ALLOWED_DOMAINS").pipe(Config.withDefault(""));
+    return Option.some<OidcConfig>({
+      issuer: issuer.value.trim(),
+      clientId: clientId.value.trim(),
+      clientSecret: clientSecret.value,
+      allowedDomains: domains
+        .split(",")
+        .map((d) => d.trim().toLowerCase().replace(/^@/, ""))
+        .filter(Boolean),
+      providerName: yield* Config.String("OIDC_PROVIDER_NAME").pipe(Config.withDefault("SSO")),
+      redirectUri: `${publicUrl.replace(/\/+$/, "")}/api/auth/oidc/callback`,
+    });
+  });
 
 export const layer = Layer.effect(
   Service,
@@ -117,6 +163,7 @@ export const layer = Layer.effect(
     );
     const port = yield* Config.Port("PORT").pipe(Config.withDefault(3000));
     const artifactPort = yield* Config.Port("ARTIFACT_PORT").pipe(Config.withDefault(3001));
+    const oidc = yield* oidcConfig(port);
     const copyPolicyRaw = yield* Config.String("ARTIFACT_COPY_POLICY").pipe(
       Config.withDefault("copy"),
     );
@@ -146,6 +193,7 @@ export const layer = Layer.effect(
       github,
       password,
       sessionSecret,
+      oidc,
       port,
       artifactPort,
       copyPolicy: copyPolicyRaw === "on-view" ? "on-view" : "copy",
