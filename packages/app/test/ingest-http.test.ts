@@ -4,7 +4,9 @@
 import { describe, expect, test } from "bun:test";
 import { Deferred, Effect, Layer } from "effect";
 import { HttpRouter } from "effect/http";
-import { ApiRoutes } from "../src/server/http.ts";
+import { BunHttpServer } from "@effect/platform-bun";
+import { ApiRoutes, ReadApi } from "../src/server/http.ts";
+import { Reads } from "../src/server/reads.ts";
 import { Auth } from "../src/server/auth.ts";
 import { Retention } from "../src/server/retention.ts";
 import { Installation } from "../src/server/installation.ts";
@@ -55,11 +57,15 @@ describe("ingest pipeline (fixtures -> fs store -> sqlite)", () => {
     });
     const { layer } = await testLayer(source);
     const app = HttpRouter.toWebHandler(
-      ApiRoutes.pipe(
+      Layer.mergeAll(ApiRoutes, ReadApi).pipe(
         Layer.provide(
-          Layer.mergeAll(Auth.layer, Retention.layer, Installation.layer).pipe(
-            Layer.provideMerge(layer),
-          ),
+          Layer.mergeAll(
+            Auth.layer,
+            Retention.layer,
+            Installation.layer,
+            Reads.layer,
+            BunHttpServer.layerHttpServices,
+          ).pipe(Layer.provideMerge(layer)),
         ),
       ),
       { disableLogger: true },
