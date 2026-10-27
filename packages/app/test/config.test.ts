@@ -1,4 +1,4 @@
-// The config layer's GitHub auth choice, read from real environment variables.
+// The config layer's GitHub auth and OIDC choices, read from real environment variables.
 import { describe, expect, test } from "bun:test";
 import { ConfigProvider, Effect, Option, Redacted } from "effect";
 import { AppConfig } from "../src/server/config.ts";
@@ -65,5 +65,39 @@ describe("AppConfig", () => {
     expect((await Effect.runPromise(read({ INGEST_POLL_MINUTES: "-5" }))).ingestPollMinutes).toBe(
       0,
     );
+  });
+
+  test("turns OIDC on only when issuer, client id and secret are all set", async () => {
+    const vars = {
+      OIDC_ISSUER: "https://login.example.com",
+      OIDC_CLIENT_ID: "tag",
+      OIDC_CLIENT_SECRET: "s3cret",
+      OIDC_ALLOWED_DOMAINS: " Example.com, @corp.example ,",
+      PUBLIC_URL: "https://tag.example.com/",
+    };
+    const oidc = Option.getOrNull((await Effect.runPromise(read(vars))).oidc);
+    expect(oidc?.issuer).toBe("https://login.example.com");
+    expect(oidc?.allowedDomains).toEqual(["example.com", "corp.example"]);
+    expect(oidc?.providerName).toBe("SSO");
+    expect(oidc?.redirectUri).toBe("https://tag.example.com/api/auth/oidc/callback");
+    expect(Redacted.value(oidc?.clientSecret ?? Redacted.make(""))).toBe("s3cret");
+    const partial = await Effect.runPromise(read({ ...vars, OIDC_CLIENT_SECRET: "" }));
+    expect(Option.isNone(partial.oidc)).toBe(true);
+  });
+
+  test("builds the OIDC redirect URI from PORT when PUBLIC_URL is unset", async () => {
+    const cfg = await Effect.runPromise(
+      read({
+        OIDC_ISSUER: "https://login.example.com",
+        OIDC_CLIENT_ID: "tag",
+        OIDC_CLIENT_SECRET: "s3cret",
+        OIDC_PROVIDER_NAME: "Example",
+        PORT: "4000",
+      }),
+    );
+    const oidc = Option.getOrNull(cfg.oidc);
+    expect(oidc?.redirectUri).toBe("http://localhost:4000/api/auth/oidc/callback");
+    expect(oidc?.providerName).toBe("Example");
+    expect(oidc?.allowedDomains).toEqual([]);
   });
 });

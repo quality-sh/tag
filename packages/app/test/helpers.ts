@@ -150,6 +150,14 @@ export const authLayer = Oidc.layer.pipe(
   Layer.provideMerge(Auth.layer),
 );
 
+/** A port free a moment ago, for a server whose URL its own config must name. */
+export const freePort = () => {
+  const probe = Bun.listen({ hostname: "127.0.0.1", port: 0, socket: { data() {} } });
+  const port = probe.port;
+  probe.stop(true);
+  return port;
+};
+
 /** Poll a real server's side effect; false when it never came true within `ms`. */
 export const eventually = async (f: () => boolean, ms = 5000): Promise<boolean> => {
   const end = Date.now() + ms;
@@ -172,6 +180,8 @@ export const serveApp = async (
     readonly http?: Layer.Layer<HttpClient.HttpClient>;
     /** A built dashboard; by default tests get a minimal placeholder page. */
     readonly webRoot?: string;
+    /** A fixed port, for config that must name the app's own URL; by default any free one. */
+    readonly port?: number;
   } = {},
 ): Promise<{
   readonly base: string;
@@ -222,7 +232,7 @@ export const serveApp = async (
   // build. So the server tap only captures the listening address, and `ready` waits
   // for the whole served layer to be built: the first request always meets the app.
   const listening = Deferred.makeUnsafe<string>();
-  const bunServer = BunHttpServer.layer({ port: 0, hostname: "127.0.0.1" }).pipe(
+  const bunServer = BunHttpServer.layer({ port: opts.port ?? 0, hostname: "127.0.0.1" }).pipe(
     Layer.tap((ctx) =>
       Effect.gen(function* () {
         const server = Context.get(ctx, HttpServer.HttpServer);
