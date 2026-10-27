@@ -1,31 +1,34 @@
 // Runs: the reports of one run folded into a single summary, newest first.
+import { Schema } from "effect";
 import type { ReportLite } from "./report.ts";
 
-export interface TrendPoint {
-  readonly runId: string;
-  readonly timestamp: string;
-  readonly passRate: number;
-  readonly failed: number;
-}
+export const TrendPoint = Schema.Struct({
+  runId: Schema.String,
+  timestamp: Schema.String,
+  passRate: Schema.Number,
+  failed: Schema.Number,
+}).annotate({ identifier: "TrendPoint" });
+export interface TrendPoint extends Schema.Schema.Type<typeof TrendPoint> {}
 
-export interface RunSummary {
-  readonly runId: string;
-  readonly owner: string;
-  readonly repo: string;
-  readonly branch: string | null;
-  readonly commit: string | null;
-  readonly timestamp: string;
-  readonly tools: ReadonlyArray<string>;
-  readonly reportIds: ReadonlyArray<string>;
-  readonly tests: number;
-  readonly passed: number;
-  readonly failed: number;
-  readonly skipped: number;
-  readonly flaky: number;
-  readonly duration: number;
-  readonly passRate: number;
-  readonly buildUrl: string | null;
-}
+export const RunSummary = Schema.Struct({
+  runId: Schema.String,
+  owner: Schema.String,
+  repo: Schema.String,
+  branch: Schema.NullOr(Schema.String),
+  commit: Schema.NullOr(Schema.String),
+  timestamp: Schema.String,
+  tools: Schema.Array(Schema.String),
+  reportIds: Schema.Array(Schema.String),
+  tests: Schema.Number,
+  passed: Schema.Number,
+  failed: Schema.Number,
+  skipped: Schema.Number,
+  flaky: Schema.Number,
+  duration: Schema.Number,
+  passRate: Schema.Number,
+  buildUrl: Schema.NullOr(Schema.String),
+}).annotate({ identifier: "RunSummary" });
+export interface RunSummary extends Schema.Schema.Type<typeof RunSummary> {}
 
 export function summarizeRun(reports: ReadonlyArray<ReportLite>): RunSummary {
   const first = reports[0];

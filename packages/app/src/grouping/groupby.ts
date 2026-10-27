@@ -1,4 +1,5 @@
 // The selectors a view takes: the field to group runs by, and the time range to look back.
+import { Schema } from "effect";
 
 export const GROUP_BYS = [
   "release",
@@ -12,7 +13,8 @@ export const GROUP_BYS = [
   "day",
   "run",
 ] as const;
-export type GroupBy = (typeof GROUP_BYS)[number];
+export const GroupBy = Schema.Literals(GROUP_BYS).annotate({ identifier: "GroupBy" });
+export type GroupBy = typeof GroupBy.Type;
 export const isGroupBy = (s: string): s is GroupBy =>
   (GROUP_BYS as ReadonlyArray<string>).includes(s);
 
@@ -58,7 +60,8 @@ export const GROUP_BY_INFO: Record<
 
 /** The range selector: how far back the home page looks. */
 export const RANGES = ["1d", "7d", "30d", "90d", "all"] as const;
-export type Range = (typeof RANGES)[number];
+export const Range = Schema.Literals(RANGES).annotate({ identifier: "Range" });
+export type Range = typeof Range.Type;
 export const isRange = (s: string): s is Range => (RANGES as ReadonlyArray<string>).includes(s);
 export function sinceOf(range: Range, now = new Date()): string | undefined {
   const days = { "1d": 1, "7d": 7, "30d": 30, "90d": 90, all: 0 }[range];
