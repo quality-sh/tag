@@ -69,3 +69,4 @@ check and tests. The S3 test skips if RustFS is not reachable on port 9000.
 
 See [deployment](docs/deploy.md) for configuration, storage and Docker.
 See [adapters](docs/adapters.md) for report formats and client-repository changes.
+See [the API](docs/api.md) for the OpenAPI document and the MCP server agents can use.
