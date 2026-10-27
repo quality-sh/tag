@@ -1,7 +1,7 @@
 // The result store's contract: the error, the row shapes, and the service interface.
 import { Context, Effect, Option, Schema } from "effect";
 import type { CtrfReport } from "@quality-sh/tag-schema";
-import type { RunnerFinding, ScanClassification, UnreadArtifact } from "../scan.ts";
+import { RunnerFinding, ScanClassification, UnreadArtifact } from "../scan.ts";
 import type { Collection, Ref, ReleaseGroup, ReportLite } from "../grouping.ts";
 import type { ArtifactStore } from "./artifact-store.ts";
 
@@ -18,99 +18,123 @@ export interface ReportOrigin {
   readonly artifactName?: string;
 }
 
-export interface RunRow {
-  readonly reportId: string;
-  readonly runId: string;
-  readonly owner: string;
-  readonly repo: string;
-  readonly tool: string;
-  readonly toolVersion: string | null;
-  readonly branch: string | null;
-  readonly commit: string | null;
-  readonly buildUrl: string | null;
-  readonly workflow: string | null;
-  readonly environment: string | null;
-  readonly timestamp: string;
-  readonly tests: number;
-  readonly passed: number;
-  readonly failed: number;
-  readonly skipped: number;
-  readonly pending: number;
-  readonly other: number;
-  readonly flaky: number;
-  readonly duration: number;
-  readonly artifactId: string | null;
-  readonly artifactName: string | null;
-  readonly adapter: string;
-  readonly ingestedAt: string;
-}
+const NullableString = Schema.NullOr(Schema.String);
+const NullableNumber = Schema.NullOr(Schema.Number);
 
-export interface TestRow {
-  readonly reportId: string;
-  readonly runId: string;
-  readonly testId: string;
-  readonly name: string;
-  readonly status: string;
-  readonly duration: number;
-  readonly filePath: string | null;
-  readonly suite: string | null;
-  readonly flaky: number;
-  readonly retries: number;
-  readonly message: string | null;
-  readonly timestamp: string;
-  readonly branch: string | null;
-  readonly tool: string;
-}
+export const RunRow = Schema.Struct({
+  reportId: Schema.String,
+  runId: Schema.String,
+  owner: Schema.String,
+  repo: Schema.String,
+  tool: Schema.String,
+  toolVersion: NullableString,
+  branch: NullableString,
+  commit: NullableString,
+  buildUrl: NullableString,
+  workflow: NullableString,
+  environment: NullableString,
+  timestamp: Schema.String,
+  tests: Schema.Number,
+  passed: Schema.Number,
+  failed: Schema.Number,
+  skipped: Schema.Number,
+  pending: Schema.Number,
+  other: Schema.Number,
+  flaky: Schema.Number,
+  duration: Schema.Number,
+  artifactId: NullableString,
+  artifactName: NullableString,
+  adapter: Schema.String,
+  ingestedAt: Schema.String,
+}).annotate({ identifier: "RunRow" });
+export interface RunRow extends Schema.Schema.Type<typeof RunRow> {}
 
-export interface MetricRow {
-  readonly reportId: string;
-  readonly testId: string;
-  readonly name: string;
-  readonly value: number | null;
-  readonly threshold: number | null;
-  readonly comparator: string | null;
-  readonly passed: number | null;
-}
+export const TestRow = Schema.Struct({
+  reportId: Schema.String,
+  runId: Schema.String,
+  testId: Schema.String,
+  name: Schema.String,
+  status: Schema.String,
+  duration: Schema.Number,
+  filePath: NullableString,
+  suite: NullableString,
+  flaky: Schema.Number,
+  retries: Schema.Number,
+  message: NullableString,
+  timestamp: Schema.String,
+  branch: NullableString,
+  tool: Schema.String,
+}).annotate({ identifier: "TestRow" });
+export interface TestRow extends Schema.Schema.Type<typeof TestRow> {}
 
-export interface ArtifactRow {
-  readonly artifactId: string;
-  readonly owner: string;
-  readonly repo: string;
-  readonly runId: string;
-  readonly name: string;
-  readonly sizeBytes: number;
-  readonly expiresAt: string | null;
-  readonly state: "listed" | "cached" | "expired";
-  readonly cachedAt: string | null;
-}
+export const MetricRow = Schema.Struct({
+  reportId: Schema.String,
+  testId: Schema.String,
+  name: Schema.String,
+  value: NullableNumber,
+  threshold: NullableNumber,
+  comparator: NullableString,
+  passed: NullableNumber,
+}).annotate({ identifier: "MetricRow" });
+export interface MetricRow extends Schema.Schema.Type<typeof MetricRow> {}
+
+/** A test's result in one report, with the metrics it recorded there. */
+export const TestHistoryRow = Schema.Struct({
+  ...TestRow.fields,
+  metrics: Schema.Array(MetricRow),
+}).annotate({ identifier: "TestHistoryRow" });
+export interface TestHistoryRow extends Schema.Schema.Type<typeof TestHistoryRow> {}
+
+export const ArtifactRow = Schema.Struct({
+  artifactId: Schema.String,
+  owner: Schema.String,
+  repo: Schema.String,
+  runId: Schema.String,
+  name: Schema.String,
+  sizeBytes: Schema.Number,
+  expiresAt: NullableString,
+  state: Schema.Literals(["listed", "cached", "expired"]),
+  cachedAt: NullableString,
+}).annotate({ identifier: "ArtifactRow" });
+export interface ArtifactRow extends Schema.Schema.Type<typeof ArtifactRow> {}
 
 /** Where a repository stands: first sight, walking its history back, or caught up. */
-export interface RepositoryRow {
-  readonly owner: string;
-  readonly repo: string;
-  readonly state: "new" | "backfilling" | "current";
-  readonly backfillDone: number;
-  readonly backfillTotal: number | null;
-  readonly firstSeenAt: string;
-  readonly updatedAt: string;
-}
+export const RepositoryRow = Schema.Struct({
+  owner: Schema.String,
+  repo: Schema.String,
+  state: Schema.Literals(["new", "backfilling", "current"]),
+  backfillDone: Schema.Number,
+  backfillTotal: NullableNumber,
+  firstSeenAt: Schema.String,
+  updatedAt: Schema.String,
+}).annotate({ identifier: "RepositoryRow" });
+export interface RepositoryRow extends Schema.Schema.Type<typeof RepositoryRow> {}
 
 /** What a scan knew about a repository: its branch and environments, then what it found. */
-export interface ScanRow {
-  readonly owner: string;
-  readonly repo: string;
-  readonly defaultBranch: string | null;
-  readonly environments: ReadonlyArray<string>;
-  readonly classification: ScanClassification | null;
+export const ScanRow = Schema.Struct({
+  owner: Schema.String,
+  repo: Schema.String,
+  defaultBranch: NullableString,
+  environments: Schema.Array(Schema.String),
+  classification: Schema.NullOr(ScanClassification),
   /** Artifacts whose samples produced a report. */
-  readonly reporting: ReadonlyArray<string>;
+  reporting: Schema.Array(Schema.String),
   /** Artifacts holding test output no adapter reads yet. */
-  readonly unread: ReadonlyArray<UnreadArtifact>;
-  readonly runners: ReadonlyArray<RunnerFinding>;
+  unread: Schema.Array(UnreadArtifact),
+  runners: Schema.Array(RunnerFinding),
   /** The indexed artifact names the scan last saw, so a changed set rescans. */
-  readonly names: ReadonlyArray<string>;
-  readonly scannedAt: string | null;
-}
+  names: Schema.Array(Schema.String),
+  scannedAt: NullableString,
+}).annotate({ identifier: "ScanRow" });
+export interface ScanRow extends Schema.Schema.Type<typeof ScanRow> {}
+
+/** A repository with how many reports the index holds for it. */
+export const RepoCount = Schema.Struct({
+  owner: Schema.String,
+  repo: Schema.String,
+  reports: Schema.Number,
+}).annotate({ identifier: "RepoCount" });
+export interface RepoCount extends Schema.Schema.Type<typeof RepoCount> {}
 
 /** The pull request TAG opened to propose a repository's CI change. */
 export interface ProposalRow {
@@ -162,10 +186,7 @@ export interface Interface {
     repo: string,
     testId: string,
     limit: number,
-  ) => Effect.Effect<
-    ReadonlyArray<TestRow & { readonly metrics: ReadonlyArray<MetricRow> }>,
-    DbError
-  >;
+  ) => Effect.Effect<ReadonlyArray<TestHistoryRow>, DbError>;
   readonly upsertArtifact: (row: ArtifactRow) => Effect.Effect<void, DbError>;
   readonly artifactsOfRun: (
     owner: string,
@@ -214,10 +235,7 @@ export interface Interface {
   readonly cachedArtifactsBefore: (
     cutoff: string,
   ) => Effect.Effect<ReadonlyArray<ArtifactRow>, DbError>;
-  readonly repos: () => Effect.Effect<
-    ReadonlyArray<{ readonly owner: string; readonly repo: string; readonly reports: number }>,
-    DbError
-  >;
+  readonly repos: () => Effect.Effect<ReadonlyArray<RepoCount>, DbError>;
   /** Every report with what groupings need, newest first; `since` is an ISO timestamp. */
   readonly reports: (opts: {
     readonly since?: string | undefined;

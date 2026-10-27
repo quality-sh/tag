@@ -1,38 +1,41 @@
 // The overview: what state each repository is in, before any grouping — the latest
 // run on its default branch, the newest release, the open pull requests.
-import { computeGroups, defaultBranchOf, pct, type GroupRow } from "./compute.ts";
-import type { ReportLite } from "./report.ts";
+import { Schema } from "effect";
+import { computeGroups, defaultBranchOf, GroupRow, pct } from "./compute.ts";
+import { ReportLite } from "./report.ts";
 import { assign, type Ref } from "./refs.ts";
-import { runsOf, type RunSummary, type TrendPoint } from "./runs.ts";
+import { RunSummary, runsOf, TrendPoint } from "./runs.ts";
 
-export interface RecentRun {
-  readonly run: RunSummary;
-  readonly reports: ReadonlyArray<ReportLite>;
-  readonly release: string | null;
-  readonly pullRequest: string | null;
-}
+export const RecentRun = Schema.Struct({
+  run: RunSummary,
+  reports: Schema.Array(ReportLite),
+  release: Schema.NullOr(Schema.String),
+  pullRequest: Schema.NullOr(Schema.String),
+}).annotate({ identifier: "RecentRun" });
+export interface RecentRun extends Schema.Schema.Type<typeof RecentRun> {}
 
-export interface RepoOverview {
-  readonly owner: string;
-  readonly repo: string;
-  readonly defaultBranch: string | null;
+export const RepoOverview = Schema.Struct({
+  owner: Schema.String,
+  repo: Schema.String,
+  defaultBranch: Schema.NullOr(Schema.String),
   /** The latest run on the default branch, against the one before it. */
-  readonly main: {
-    readonly run: RunSummary | null;
-    readonly vsPrevious: number | null;
-    readonly trend: ReadonlyArray<TrendPoint>;
-  };
+  main: Schema.Struct({
+    run: Schema.NullOr(RunSummary),
+    vsPrevious: Schema.NullOr(Schema.Number),
+    trend: Schema.Array(TrendPoint),
+  }),
   /** The newest release or tag with its verdict. */
-  readonly release: GroupRow | null;
-  readonly pullRequests: {
-    readonly open: number;
-    readonly failing: number;
-    readonly rows: ReadonlyArray<GroupRow>;
-  };
-  readonly flaky: number;
-  readonly runs: number;
-  readonly recent: ReadonlyArray<RecentRun>;
-}
+  release: Schema.NullOr(GroupRow),
+  pullRequests: Schema.Struct({
+    open: Schema.Number,
+    failing: Schema.Number,
+    rows: Schema.Array(GroupRow),
+  }),
+  flaky: Schema.Number,
+  runs: Schema.Number,
+  recent: Schema.Array(RecentRun),
+}).annotate({ identifier: "RepoOverview" });
+export interface RepoOverview extends Schema.Schema.Type<typeof RepoOverview> {}
 
 const isOpen = (r: Ref) => r.kind === "pull_request" && typeof r.meta.closedAt !== "string";
 

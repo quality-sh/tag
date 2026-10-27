@@ -1,32 +1,43 @@
 // What a repository runs and already uploads, decided from its tree, its workflow texts and
 // artifact samples. Pure: the caller fetches paths and texts; this module only reads them.
+import { Schema } from "effect";
 
-export type ScanClassification = "reporting" | "needs-change" | "unsupported" | "no-tests";
+export const ScanClassification = Schema.Literals([
+  "reporting",
+  "needs-change",
+  "unsupported",
+  "no-tests",
+]);
+export type ScanClassification = typeof ScanClassification.Type;
 
-export type Runner =
-  | "vitest"
-  | "jest"
-  | "bun test"
-  | "playwright"
-  | "mocha"
-  | "cargo test"
-  | "nextest"
-  | "pytest"
-  | "go test"
-  | "deepeval";
+export const Runner = Schema.Literals([
+  "vitest",
+  "jest",
+  "bun test",
+  "playwright",
+  "mocha",
+  "cargo test",
+  "nextest",
+  "pytest",
+  "go test",
+  "deepeval",
+]);
+export type Runner = typeof Runner.Type;
 
-export interface RunnerFinding {
-  readonly runner: Runner;
+export const RunnerFinding = Schema.Struct({
+  runner: Runner,
   /** The workflow job that runs it, when a workflow does. */
-  readonly job: string | null;
+  job: Schema.NullOr(Schema.String),
   /** The command line that runs it, when a workflow does. */
-  readonly command: string | null;
-}
+  command: Schema.NullOr(Schema.String),
+}).annotate({ identifier: "RunnerFinding" });
+export interface RunnerFinding extends Schema.Schema.Type<typeof RunnerFinding> {}
 
-export interface UnreadArtifact {
-  readonly name: string;
-  readonly format: "mocha-json" | "tap" | "go-test-json" | "unknown";
-}
+export const UnreadArtifact = Schema.Struct({
+  name: Schema.String,
+  format: Schema.Literals(["mocha-json", "tap", "go-test-json", "unknown"]),
+}).annotate({ identifier: "UnreadArtifact" });
+export interface UnreadArtifact extends Schema.Schema.Type<typeof UnreadArtifact> {}
 
 /** Config files whose presence alone says a runner is set up. */
 const CONFIG_FILES: ReadonlyArray<readonly [Runner, (base: string) => boolean]> = [

@@ -1,8 +1,9 @@
 // Suggestions for the search bar: what the word being typed can mean — fields,
 // their values, or a plain text search.
+import { Schema } from "effect";
 import { dayOf } from "./match.ts";
 import type { ReportLite } from "./report.ts";
-import { ALIASES, FIELDS, FIELD_INFO, fieldOf, quote, type Field } from "./query.ts";
+import { ALIASES, Field, FIELDS, FIELD_INFO, fieldOf, quote } from "./query.ts";
 import { assign, type Ref } from "./refs.ts";
 
 export interface ValueIndex {
@@ -40,15 +41,16 @@ export function indexValues(
   return { values };
 }
 
-export interface Suggestion {
-  readonly kind: "field" | "value" | "text";
-  readonly field: Field | null;
-  readonly value: string;
-  readonly count: number | null;
-  readonly note: string;
+export const Suggestion = Schema.Struct({
+  kind: Schema.Literals(["field", "value", "text"]),
+  field: Schema.NullOr(Field),
+  value: Schema.String,
+  count: Schema.NullOr(Schema.Number),
+  note: Schema.String,
   /** What to append to the query when chosen. */
-  readonly token: string;
-}
+  token: Schema.String,
+}).annotate({ identifier: "Suggestion" });
+export interface Suggestion extends Schema.Schema.Type<typeof Suggestion> {}
 
 /** Suggestions for the word being typed: fields first, then values, then text search. */
 export function suggest(index: ValueIndex, typed: string, limit = 8): Suggestion[] {

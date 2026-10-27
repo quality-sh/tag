@@ -8,9 +8,18 @@ import { Installation } from "./installation.ts";
 import type { Ingest } from "./ingest.ts";
 import { json, query } from "./http-helpers.ts";
 import { WEBHOOK_PATH } from "./http-webhook-routes.ts";
+import { DOCS_PATH, OPENAPI_PATH } from "./http-api.ts";
 
 // GitHub posts the webhook with no session; its signature stands in for one.
-const PUBLIC_PATHS = new Set(["/api/health", "/api/login", "/api/session", WEBHOOK_PATH]);
+// The API description reveals no data, so agents can read it before they authenticate.
+const PUBLIC_PATHS = new Set([
+  "/api/health",
+  "/api/login",
+  "/api/session",
+  WEBHOOK_PATH,
+  OPENAPI_PATH,
+  DOCS_PATH,
+]);
 
 const cookieOptions = (maxAgeSeconds: number) => ({
   httpOnly: true,

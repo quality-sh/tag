@@ -1,5 +1,6 @@
 // The query language: the fields a query can name, the filters it parses into, and
 // how filters format back to query text and search-bar chips.
+import { Schema } from "effect";
 
 export const FIELDS = [
   "org",
@@ -19,7 +20,8 @@ export const FIELDS = [
   "tests",
   "text",
 ] as const;
-export type Field = (typeof FIELDS)[number];
+export const Field = Schema.Literals(FIELDS).annotate({ identifier: "Field" });
+export type Field = typeof Field.Type;
 
 export const ALIASES: Record<string, Field> = {
   env: "environment",

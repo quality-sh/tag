@@ -95,6 +95,10 @@ proxy, `ARTIFACT_ORIGIN` can override the public artifact origin. This extra var
 is read in `http-collection-routes.ts`, outside the config module. Route that origin
 to the artifact port and keep it separate from the dashboard origin.
 
+The dashboard port also serves the OpenAPI document at `/api/openapi.json` and the MCP
+server at `/mcp`. With a password set, `/mcp` takes the session cookie or
+`Authorization: Bearer <TAG_PASSWORD>`. See [the API](api.md).
+
 Ingest runs at boot with a limit of 20 recent runs per repository. The dashboard's
 ingest button calls `POST /api/ingest`. The App install callback also starts a pass.
 A finished run reaches TAG through the App's webhook, and a poll every

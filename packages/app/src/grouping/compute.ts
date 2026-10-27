@@ -1,15 +1,18 @@
 // The group computation: buckets of reports per group key, and each row's runs,
 // verdict, trend and baseline, with the default-branch guess the baselines need.
-import type { GroupBy } from "./groupby.ts";
+import { Schema } from "effect";
+import { GroupBy } from "./groupby.ts";
 import type { ReportLite } from "./report.ts";
 import type { Filter } from "./query.ts";
 import { dayOf, matches } from "./match.ts";
-import { assign, sameRepo, type Assigned, type Ref } from "./refs.ts";
-import { runKey, runsOf, type RunSummary, type TrendPoint } from "./runs.ts";
+import { assign, Ref, sameRepo, type Assigned } from "./refs.ts";
+import { runKey, RunSummary, runsOf, TrendPoint } from "./runs.ts";
 import { lockRows, type ReleaseGroup } from "./release-groups.ts";
 
-export type Verdict = "passed" | "failed" | "none";
+export const Verdict = Schema.Literals(["passed", "failed", "none"]);
+export type Verdict = typeof Verdict.Type;
 
+// Recursive through `members`, so the interface is written out and the schema checked against it.
 export interface GroupRow {
   readonly by: GroupBy;
   readonly key: string;
@@ -30,6 +33,25 @@ export interface GroupRow {
   /** A release group's version row: the member repositories' own rows. */
   readonly members?: ReadonlyArray<GroupRow>;
 }
+
+export const GroupRow: Schema.Codec<GroupRow> = Schema.Struct({
+  by: GroupBy,
+  key: Schema.String,
+  label: Schema.String,
+  owner: Schema.String,
+  repo: Schema.String,
+  facts: Schema.Array(Schema.String),
+  verdict: Verdict,
+  latest: Schema.NullOr(RunSummary),
+  runs: Schema.Number,
+  trend: Schema.Array(TrendPoint),
+  vsBaseline: Schema.NullOr(Schema.Number),
+  baselineLabel: Schema.NullOr(Schema.String),
+  baselineRun: Schema.NullOr(RunSummary),
+  lastAt: Schema.String,
+  ref: Schema.NullOr(Ref),
+  members: Schema.optionalKey(Schema.Array(Schema.suspend((): Schema.Codec<GroupRow> => GroupRow))),
+}).annotate({ identifier: "GroupRow" });
 
 export interface GroupInput {
   readonly reports: ReadonlyArray<ReportLite>;

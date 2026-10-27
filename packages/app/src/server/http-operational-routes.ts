@@ -1,7 +1,6 @@
-// The operational routes: health, ingest passes, retention sweeps, and the index rebuild.
-import { Effect, Option, Schema } from "effect";
+// The operational routes: ingest passes, retention sweeps, and the index rebuild.
+import { Effect, Schema } from "effect";
 import { HttpRouter, HttpServerRequest } from "effect/http";
-import type { AppConfig } from "./config.ts";
 import { ResultStore } from "./result-store.ts";
 import type { Ingest } from "./ingest.ts";
 import type { Retention } from "./retention.ts";
@@ -15,19 +14,12 @@ const IngestBody = Schema.Struct({
 
 export const addOperationalRoutes = (deps: {
   readonly router: HttpRouter.HttpRouter;
-  readonly cfg: AppConfig.Interface;
   readonly ingest: Ingest.Interface;
   readonly retention: Retention.Interface;
   readonly results: ResultStore.Interface;
 }) =>
   Effect.gen(function* () {
-    const { router, cfg, ingest, retention, results } = deps;
-
-    yield* router.add(
-      "GET",
-      "/api/health",
-      json({ ok: true, source: cfg.source, store: Option.isSome(cfg.s3) ? "s3" : "fs" }),
-    );
+    const { router, ingest, retention, results } = deps;
 
     yield* router.add("GET", "/api/ingest/status", () => Effect.map(ingest.status(), json));
 
