@@ -47,5 +47,11 @@
       }
     ]
   },
-  "include": ["packages/*/src", "packages/*/test", "packages/app/vite.config.ts", "scripts/*.ts"]
+  "include": [
+    "packages/*/src",
+    "packages/*/test",
+    "packages/app/scripts",
+    "packages/app/vite.config.ts",
+    "scripts/*.ts"
+  ]
 }

@@ -19,8 +19,8 @@
       "ignoreDependencies": ["@fontsource/cormorant-garamond", "@fontsource/fragment-mono"],
     },
     "packages/app": {
-      "entry": ["src/index.ts", "test/**/*.test.ts"],
-      "project": ["src/**/*.{ts,tsx}", "test/**/*.ts"],
+      "entry": ["src/index.ts", "test/**/*.test.ts", "scripts/sizzle.ts"],
+      "project": ["src/**/*.{ts,tsx}", "test/**/*.ts", "scripts/**/*.ts"],
     },
   },
   "include": ["files", "exports", "dependencies", "unlisted", "binaries", "unresolved"],

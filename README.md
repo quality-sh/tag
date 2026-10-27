@@ -1,5 +1,9 @@
 # TAG
 
+![TAG: the overview, a repository, a failing test and a proposed CI change](docs/sizzle.gif)
+
+_The overview, a repository with its pull request and release, a failing test, and the CI change TAG proposes. `bun run sizzle` re-records it._
+
 TAG (test aggregator GUI) collects the test reports that CI already produces.
 It turns CTRF, JUnit, Playwright and DeepEval reports into one dashboard with history.
 
