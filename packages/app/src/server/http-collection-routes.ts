@@ -1,11 +1,11 @@
 // Collections and artifacts: the saved scopes, and the short-lived artifact links.
 import { Effect, Option } from "effect";
 import { HttpRouter, HttpServerRequest } from "effect/http";
-import { CollectionInput, type Collection, sinceOf } from "../grouping.ts";
+import { CollectionInput, type Collection } from "../grouping.ts";
 import type { AppConfig } from "./config.ts";
 import { Auth } from "./auth.ts";
 import { ResultStore } from "./result-store.ts";
-import { collectionRows, json, notFound, query, slug, BadRequest } from "./http-helpers.ts";
+import { json, notFound, query, slug, BadRequest } from "./http-helpers.ts";
 
 /** Same host as the request, on the artifact port. ARTIFACT_ORIGIN overrides this in production. */
 function artifactOriginFor(req: HttpServerRequest.HttpServerRequest, artifactPort: number): string {
@@ -43,17 +43,6 @@ export const addCollectionRoutes = (deps: {
 }) =>
   Effect.gen(function* () {
     const { router, results, auth, cfg } = deps;
-
-    /** Every collection with what it holds now: groups, runs and failing groups over 30 days. */
-    yield* router.add("GET", "/api/collections", () =>
-      Effect.gen(function* () {
-        const list = yield* results.collections();
-        const since = sinceOf("30d");
-        const reports = yield* results.reports({ since });
-        const refs = yield* results.refs();
-        return json(collectionRows(list, reports, refs, since));
-      }),
-    );
 
     yield* router.add("POST", "/api/collections", () =>
       Effect.gen(function* () {

@@ -2,14 +2,10 @@
 import { Schema } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import {
-  isGroupBy,
-  isRange,
   matching,
   parseQuery,
   runsOf,
   type Collection,
-  type GroupBy,
-  type Range,
   type Ref,
   type ReportLite,
 } from "../grouping.ts";
@@ -22,17 +18,11 @@ export const notFound = (what: string) => json({ error: `${what} not found` }, 4
 
 export const query = (req: HttpServerRequest.HttpServerRequest) =>
   new URL(req.url, "http://local").searchParams;
-export const optional = (v: string | null): string | undefined =>
-  v && v.length > 0 ? v : undefined;
 
 export class BadRequest extends Schema.TaggedError<BadRequest>()("BadRequest", {
   detail: Schema.String,
 }) {}
 
-export const groupByOf = (s: string | null, fallback: GroupBy = "release"): GroupBy =>
-  s && isGroupBy(s) ? s : fallback;
-export const rangeOf = (s: string | null, fallback: Range = "30d"): Range =>
-  s && isRange(s) ? s : fallback;
 export const slug = (name: string) =>
   name
     .toLowerCase()
