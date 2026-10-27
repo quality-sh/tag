@@ -1,9 +1,12 @@
 // The MCP endpoint over the real app: an Effect MCP client initializes, lists the tools and
 // calls them against the fixtures; /mcp keeps out callers without a session or the password.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { Effect, Layer, Redacted } from "effect";
+import { Effect, Layer, Redacted, Schema } from "effect";
 import { McpClient, McpProtocol } from "effect/ai";
 import { FetchHttpClient } from "effect/http";
+import { RunSummary, Suggestion } from "../src/grouping.ts";
+import { TestHistoryRow } from "../src/server/result-store.ts";
+import { GroupPage, GroupsView, Overview, ReportPage } from "../src/server/read-schemas.ts";
 import { MCP_PATH, OPENAPI_RESOURCE } from "../src/server/mcp.ts";
 import { serveApp, signInAndIngest } from "./helpers.ts";
 
@@ -131,6 +134,57 @@ describe("the MCP endpoint with a password", () => {
     const text = result.openapi.contents[0];
     const spec = JSON.parse(text && "text" in text ? text.text : "{}") as { paths: object };
     expect(Object.keys(spec.paths)).toContain("/api/groups/{by}/{key}");
+  });
+
+  test("every other tool answers from the fixtures, in its declared shape", async () => {
+    const answers = await withClient(app.base, { authorization: "Bearer test" }, (client) =>
+      Effect.gen(function* () {
+        const byName = new Map((yield* client.listTools()).map((t) => [t.name, t]));
+        const call = <S extends Schema.Top>(
+          name: string,
+          schema: S,
+          args: Record<string, unknown>,
+        ) => {
+          const tool = byName.get(name);
+          if (!tool) return Effect.die(`no tool ${name}`);
+          return client.callTool({ tool, schema, arguments: args });
+        };
+        const overview = yield* call("overview", Overview, {
+          range: "all",
+          query: "repo:acme/widgets",
+        });
+        const fields = yield* call(
+          "list_fields",
+          Schema.Struct({ suggestions: Schema.Array(Suggestion) }),
+          {
+            q: "too",
+          },
+        );
+        const { runs } = yield* call("runs", Schema.Struct({ runs: Schema.Array(RunSummary) }), {
+          range: "all",
+          limit: 2,
+        });
+        const run = runs[0];
+        if (!run) return yield* Effect.die("no runs");
+        const report = yield* call("report", ReportPage, { reportId: run.reportIds[0] });
+        const test = report.tests[0];
+        if (!test) return yield* Effect.die("no tests");
+        const { history } = yield* call(
+          "test_history",
+          Schema.Struct({ history: Schema.Array(TestHistoryRow) }),
+          { owner: run.owner, repo: run.repo, testId: test.testId },
+        );
+        const groups = yield* call("groups", GroupsView, { by: "tool", range: "all" });
+        const key = groups.groups[0]?.key ?? "";
+        const group = yield* call("group", GroupPage, { by: "tool", key, range: "all" });
+        return { overview, fields, runs, test, history, key, group };
+      }),
+    );
+    expect(answers.overview.repos.map((r) => r.repo)).toEqual(["widgets"]);
+    expect(answers.fields.suggestions[0]?.field).toBe("tool");
+    expect(answers.runs).toHaveLength(2);
+    expect(answers.history[0]?.testId).toBe(answers.test.testId);
+    expect(answers.group.group.key).toBe(answers.key);
   });
 
   test("takes the dashboard session cookie too, over the stateless protocol", async () => {
