@@ -190,6 +190,19 @@ export const loginFn = runtime.fn((password: string) =>
   ),
 );
 
+/** Where the login page sends the viewer to sign in with the OIDC provider. */
+export const OIDC_START_URL = "/api/auth/oidc/start";
+
+/**
+ * Why the last OIDC sign-in was refused: the callback's `?login_error`, read once and then
+ * dropped from the address bar so a reload does not show it again.
+ */
+export const loginErrorAtom = Atom.make(() => {
+  const error = new URLSearchParams(location.search).get("login_error");
+  if (error !== null) history.replaceState(null, "", location.pathname + location.hash);
+  return error;
+}).pipe(Atom.keepAlive);
+
 export const logoutFn = runtime.fn(() =>
   withApi((api) => api.logout()).pipe(Effect.andThen(Reactivity.invalidate(keys.session))),
 );
