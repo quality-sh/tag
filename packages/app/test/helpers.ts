@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Context, Deferred, Effect, Layer, Option, Redacted } from "effect";
 import {
+  FetchHttpClient,
   HttpClient,
   type HttpClientRequest,
   HttpClientResponse,
@@ -21,6 +22,7 @@ import { ResultStore } from "../src/server/result-store.ts";
 import { Ingest } from "../src/server/ingest.ts";
 import { Retention } from "../src/server/retention.ts";
 import { Auth } from "../src/server/auth.ts";
+import { Oidc } from "../src/server/oidc.ts";
 import { App } from "../src/server/http.ts";
 
 export const FIXTURES = new URL("../../../fixtures/", import.meta.url).pathname;
@@ -34,6 +36,7 @@ export const testConfig = (overrides: Partial<AppConfig.Interface> = {}): AppCon
   github: Option.none(),
   password: Redacted.make("test"),
   sessionSecret: Redacted.make("test-secret"),
+  oidc: Option.none(),
   port: 0,
   artifactPort: 0,
   copyPolicy: "copy",
@@ -141,6 +144,12 @@ export const fakeGithub = (
   return { hits, layer: Layer.succeed(HttpClient.HttpClient, client) };
 };
 
+/** Auth and OIDC as production builds them; OIDC talks to providers over fetch. */
+export const authLayer = Oidc.layer.pipe(
+  Layer.provide(FetchHttpClient.layer),
+  Layer.provideMerge(Auth.layer),
+);
+
 /** Poll a real server's side effect; false when it never came true within `ms`. */
 export const eventually = async (f: () => boolean, ms = 5000): Promise<boolean> => {
   const end = Date.now() + ms;
@@ -195,7 +204,7 @@ export const serveApp = async (
     : ArtifactSource.layerFixtures(opts.overrides?.fixturesDir ?? FIXTURES);
   const ingest = Ingest.layer.pipe(Layer.provide(Layer.mergeAll(config, store, source, results)));
   const retention = Retention.layer.pipe(Layer.provide(Layer.mergeAll(config, store, results)));
-  const auth = Auth.layer.pipe(Layer.provide(config));
+  const auth = authLayer.pipe(Layer.provide(config));
   const services = Layer.mergeAll(
     config,
     store,

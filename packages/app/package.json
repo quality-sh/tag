@@ -7,11 +7,12 @@
     "@effect/platform-bun": "^4.0.6",
     "@quality-sh/tag-adapters": "workspace:*",
     "@quality-sh/tag-schema": "workspace:*",
+    "@quality-sh/tag-ui": "workspace:*",
     "effect": "^4.0.6",
     "fflate": "^0.8.2",
+    "jose": "^6.2.13",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "@quality-sh/tag-ui": "workspace:*"
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@stylexjs/unplugin": "^0.19.1",
