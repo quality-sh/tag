@@ -80,7 +80,12 @@ export interface ArtifactRow {
   readonly name: string;
   readonly sizeBytes: number;
   readonly expiresAt: string | null;
-  readonly state: "listed" | "cached" | "expired";
+  /**
+   * listed: known, files not fetched yet (ingest retries it). cached: files in the store.
+   * skipped: no adapter reads it, or it is over the copy cap; ingest leaves it be.
+   * expired: gone at the source. A view fetches any artifact that is not cached.
+   */
+  readonly state: "listed" | "cached" | "skipped" | "expired";
   readonly cachedAt: string | null;
 }
 
@@ -208,7 +213,7 @@ export interface Interface {
   /** After a sweep: the files are gone, so the row is "listed" again, or "expired" when the source is too. */
   readonly markArtifactSwept: (
     artifactId: string,
-    state: "listed" | "expired",
+    state: "listed" | "skipped" | "expired",
   ) => Effect.Effect<void, DbError>;
   /** Cached artifacts whose run (or, failing that, cache time) is older than `cutoff`. */
   readonly cachedArtifactsBefore: (

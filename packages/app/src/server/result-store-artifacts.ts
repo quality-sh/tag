@@ -81,7 +81,7 @@ export const makeArtifacts = (
         )
         .all(owner, repo, runId),
     );
-  const markArtifactSwept = (artifactId: string, state: "listed" | "expired") =>
+  const markArtifactSwept = (artifactId: string, state: "listed" | "skipped" | "expired") =>
     trySync("markArtifactSwept", () => {
       db.query(`UPDATE artifacts SET state = ?, cached_at = NULL WHERE artifact_id = ?`).run(
         state,
