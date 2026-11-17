@@ -52,7 +52,12 @@ export const layer = Layer.effect(
         });
 
     const { cacheArtifact } = makeCacheArtifact({ store, source, results });
-    const { ingestArtifact } = makeIngestArtifact({ store, results, cacheArtifact });
+    const { ingestArtifact } = makeIngestArtifact({
+      store,
+      results,
+      cacheArtifact,
+      copyMaxBytes: cfg.artifactCopyMaxBytes,
+    });
     const indexRunWith = (record: RecordError) =>
       makeIndexRun({ results, ingestArtifact, recordError: record });
     const { scanRepo } = makeScanRepo({ source, results, ingestArtifact });

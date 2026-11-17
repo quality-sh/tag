@@ -43,6 +43,8 @@ export interface Interface {
   readonly copyPolicy: "copy" | "on-view";
   /** Cached artifact files older than this leave the store; 0 keeps them forever. Reports stay. */
   readonly artifactRetentionDays: number;
+  /** Ingest skips the download of a larger artifact; it stays listed and a view fetches it. 0 is no cap. */
+  readonly artifactCopyMaxBytes: number;
   /** The App's webhook secret; with none set, the webhook endpoint answers 404. */
   readonly webhookSecret: Option.Option<Redacted.Redacted<string>>;
   /** Minutes between backstop passes; 0 turns the poll off. */
@@ -124,6 +126,9 @@ export const layer = Layer.effect(
     const artifactRetentionDays = yield* Config.Number("ARTIFACT_RETENTION_DAYS").pipe(
       Config.withDefault(90),
     );
+    const artifactCopyMaxMb = yield* Config.Number("ARTIFACT_COPY_MAX_MB").pipe(
+      Config.withDefault(0),
+    );
 
     // An empty value, as .env.example leaves it, means no webhook.
     const webhookSecret = Option.filter(
@@ -136,6 +141,7 @@ export const layer = Layer.effect(
 
     return Service.of({
       artifactRetentionDays,
+      artifactCopyMaxBytes: Math.max(0, artifactCopyMaxMb) * 1024 * 1024,
       webhookSecret,
       ingestPollMinutes: Math.max(0, ingestPollMinutes),
       s3,

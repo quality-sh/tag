@@ -38,6 +38,7 @@ export const testConfig = (overrides: Partial<AppConfig.Interface> = {}): AppCon
   artifactPort: 0,
   copyPolicy: "copy",
   artifactRetentionDays: 90,
+  artifactCopyMaxBytes: 0,
   webhookSecret: Option.none(),
   ingestPollMinutes: 0,
   ...overrides,
