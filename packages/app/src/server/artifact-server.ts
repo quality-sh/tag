@@ -7,6 +7,7 @@ import { ArtifactStore } from "./artifact-store.ts";
 import { ResultStore } from "./result-store.ts";
 import { ArtifactSource } from "./artifact-source.ts";
 import { Ingest, artifactPrefix } from "./ingest.ts";
+import { COMPLETE } from "./ingest-cache.ts";
 
 const CSP = [
   "default-src 'self'",
@@ -31,6 +32,31 @@ const SAFETY_HEADERS = {
 };
 
 const deny = (status: number, text: string) => HttpServerResponse.text(text, { status });
+
+const HTML_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => HTML_ESCAPES[c] ?? c);
+
+/** The page for an artifact with no index.html: its files, each a link relative to this page. */
+const fileList = (name: string, paths: ReadonlyArray<string>) => {
+  const items = paths
+    .map((p) => {
+      const href = p.split("/").map(encodeURIComponent).join("/");
+      return `<li><a href="${escapeHtml(href)}">${escapeHtml(p)}</a></li>`;
+    })
+    .join("");
+  const body = paths.length ? `<ul>${items}</ul>` : "<p>This artifact has no files.</p>";
+  return HttpServerResponse.html(
+    `<!doctype html><meta charset="utf-8"><title>${escapeHtml(name)}</title>` +
+      `<style>body{font:14px/1.5 system-ui,sans-serif;margin:16px}</style>` +
+      `<h1>${escapeHtml(name)}</h1><p>No index.html in this artifact. Its files:</p>${body}`,
+  ).pipe(HttpServerResponse.setHeaders(SAFETY_HEADERS));
+};
 
 export const ArtifactRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
@@ -86,7 +112,15 @@ export const ArtifactRoutes = HttpRouter.use((router) =>
           yield* ingest.cacheArtifact(meta).pipe(Effect.orDie);
           blob = yield* store.get(key);
         }
-        if (Option.isNone(blob)) return deny(404, "file not in artifact");
+        if (Option.isNone(blob)) {
+          if (rest !== "index.html") return deny(404, "file not in artifact");
+          const prefix = artifactPrefix(art.value);
+          const paths = (yield* store.list(prefix))
+            .map((key) => key.slice(prefix.length))
+            .filter((path) => path !== COMPLETE)
+            .sort();
+          return fileList(art.value.name, paths);
+        }
 
         return HttpServerResponse.uint8Array(blob.value.bytes, {
           contentType: blob.value.contentType,

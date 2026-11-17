@@ -1,5 +1,5 @@
 import { expect } from "bun:test";
-import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -65,6 +65,17 @@ sweepLeakedTmpDirs();
 export const tmpDir = () => mkdtemp(join(tmpdir(), "tag-"));
 /** Same as `tmpDir`, where the caller needs the path before any await. */
 export const tmpDirSync = () => mkdtempSync(join(tmpdir(), "tag-"));
+
+/** The widgets fixtures plus a run-1001 artifact that no adapter reads. */
+export const fixturesWithBuildOutput = async () => {
+  const dir = await tmpDir();
+  await cp(FIXTURES, dir, { recursive: true });
+  const out = join(dir, "acme/widgets/run-1001/build-output");
+  await mkdir(out, { recursive: true });
+  await writeFile(join(out, "app.bin"), new Uint8Array(4096));
+  await writeFile(join(out, "notes & <readme>.txt"), "not a report");
+  return dir;
+};
 
 /** Full stack on a temp filesystem store and an in-memory index. */
 export const testLayer = async (

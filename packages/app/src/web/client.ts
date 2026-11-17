@@ -80,7 +80,7 @@ export interface ArtifactRow {
   name: string;
   sizeBytes: number;
   expiresAt: string | null;
-  state: "listed" | "cached" | "expired";
+  state: "listed" | "cached" | "skipped" | "expired";
   cachedAt: string | null;
 }
 

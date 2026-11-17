@@ -9,7 +9,7 @@ import {
 } from "./artifact-source.ts";
 import { ResultStore } from "./result-store.ts";
 import { type IngestError } from "./ingest-contract.ts";
-import type { IngestArtifact } from "./ingest-run.ts";
+import type { IngestArtifact, SkipArtifact } from "./ingest-run.ts";
 import { ZipError } from "./zip.ts";
 
 const artifactMetaOf = (row: ResultStore.ArtifactRow): ArtifactMeta => ({
@@ -41,8 +41,9 @@ export const makeScanRepo = (deps: {
   readonly source: ArtifactSource.Interface;
   readonly results: ResultStore.Interface;
   readonly ingestArtifact: IngestArtifact;
+  readonly skipArtifact: SkipArtifact;
 }) => {
-  const { source, results, ingestArtifact } = deps;
+  const { source, results, ingestArtifact, skipArtifact } = deps;
   const scanRepo = Effect.fn("Ingest.scanRepo")(function* (
     repo: RepoRef,
     info: ArtifactSource.RepoInfo,
@@ -83,6 +84,8 @@ export const makeScanRepo = (deps: {
       );
       const format = sniffSample(contents);
       if (format !== null && format !== "unknown") unread.push({ name: artifact.name, format });
+      // The sample has been read; its files go the way of every artifact no adapter reads.
+      yield* skipArtifact(artifact);
     }
     const paths = yield* source.repoTree(repo);
     const runners = detectRunners({

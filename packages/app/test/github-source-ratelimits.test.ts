@@ -5,6 +5,7 @@ import { Deferred, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
 import { ArtifactSource } from "../src/server/artifact-source.ts";
 import { Ingest } from "../src/server/ingest.ts";
+import { readFileSync } from "node:fs";
 import { buildZip } from "../src/server/zip.ts";
 import { fakeGithub, testLayer } from "./helpers.ts";
 import { cfg, run, sourceWith, using } from "./github-fixtures.ts";
@@ -74,7 +75,11 @@ describe("GitHubSource", () => {
   test("a pass waits on the fifth download, gates later runs and reports one wait", async () => {
     const limited = Deferred.makeUnsafe<void>();
     const downloads: number[] = [];
-    const zip = buildZip([]);
+    // A real report, so ingest keeps each artifact and the scan has nothing to sample.
+    const junit = readFileSync(
+      new URL("../../../fixtures/acme/widgets/run-1003/junit-results/results.xml", import.meta.url),
+    );
+    const zip = buildZip([{ path: "results.xml", bytes: new Uint8Array(junit) }]);
     const gh = fakeGithub({
       "/repos/acme/widgets": () => ({ default_branch: "main" }),
       "/repos/acme/widgets/environments": () => ({ environments: [] }),

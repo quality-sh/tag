@@ -6,7 +6,7 @@ import type { ArtifactMeta, RunMeta } from "./artifact-source.ts";
 import { ArtifactStore } from "./artifact-store.ts";
 import { ResultStore } from "./result-store.ts";
 import { type IngestError, type Interface, type RecordError } from "./ingest-contract.ts";
-import { COMPLETE } from "./ingest-cache.ts";
+import { COMPLETE, artifactPrefix } from "./ingest-cache.ts";
 import { ZipError } from "./zip.ts";
 
 /** Cache an artifact, then read its files and index every report the adapters produce. */
@@ -114,12 +114,26 @@ export interface RunTally {
  * One run, wherever it was found: record a fresh run's artifacts and mark it seen, then
  * cache and index each artifact. A failed artifact stays "listed" for the next attempt.
  */
+/** No adapter read a report from it: keep the row, drop the files; a view fetches them. */
+export type SkipArtifact = (artifact: ArtifactMeta) => Effect.Effect<void, IngestError>;
+
+export const makeSkipArtifact = (deps: {
+  readonly store: ArtifactStore.Interface;
+  readonly results: ResultStore.Interface;
+}): SkipArtifact =>
+  Effect.fn("Ingest.skipArtifact")(function* (artifact: ArtifactMeta) {
+    const prefix = artifactPrefix(artifact);
+    for (const key of yield* deps.store.list(prefix)) yield* deps.store.remove(key);
+    yield* deps.results.markArtifactSwept(artifact.artifactId, "skipped");
+  });
+
 export const makeIndexRun = (deps: {
   readonly results: ResultStore.Interface;
   readonly ingestArtifact: IngestArtifact;
+  readonly skipArtifact: SkipArtifact;
   readonly recordError: RecordError;
 }) => {
-  const { results, ingestArtifact, recordError } = deps;
+  const { results, ingestArtifact, skipArtifact, recordError } = deps;
 
   /** A seen run's artifacts still waiting for a download, read from the index. */
   const indexedArtifacts = Effect.fn("Ingest.indexedArtifacts")(function* (run: RunMeta) {
@@ -164,6 +178,7 @@ export const makeIndexRun = (deps: {
       acc.artifacts++;
       if (artifact.expired) continue;
       yield* ingestArtifact(run, artifact, acc).pipe(
+        Effect.flatMap(({ reports }) => (reports === 0 ? skipArtifact(artifact) : Effect.void)),
         Effect.catchCause((c) => {
           return recordError(acc.errors, `${run.runId}/${artifact.name}: ${String(c)}`);
         }),

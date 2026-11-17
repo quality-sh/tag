@@ -11,7 +11,7 @@ import {
   Service,
 } from "./ingest-contract.ts";
 import { makeCacheArtifact } from "./ingest-cache.ts";
-import { makeIndexRun, makeIngestArtifact } from "./ingest-run.ts";
+import { makeIndexRun, makeIngestArtifact, makeSkipArtifact } from "./ingest-run.ts";
 import { makeScanRepo } from "./ingest-scan.ts";
 import { makeIngestRepo } from "./ingest-repo.ts";
 import { makePass } from "./ingest-pass.ts";
@@ -58,9 +58,10 @@ export const layer = Layer.effect(
       cacheArtifact,
       copyMaxBytes: cfg.artifactCopyMaxBytes,
     });
+    const skipArtifact = makeSkipArtifact({ store, results });
     const indexRunWith = (record: RecordError) =>
-      makeIndexRun({ results, ingestArtifact, recordError: record });
-    const { scanRepo } = makeScanRepo({ source, results, ingestArtifact });
+      makeIndexRun({ results, ingestArtifact, skipArtifact, recordError: record });
+    const { scanRepo } = makeScanRepo({ source, results, ingestArtifact, skipArtifact });
     const { ingestRepo } = makeIngestRepo({
       cfg,
       source,
