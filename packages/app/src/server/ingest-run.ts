@@ -23,8 +23,10 @@ export const makeIngestArtifact = (deps: {
   readonly store: ArtifactStore.Interface;
   readonly results: ResultStore.Interface;
   readonly cacheArtifact: Interface["cacheArtifact"];
+  /** A larger artifact is not downloaded: it stays listed, and its first view fetches it. 0 is no cap. */
+  readonly copyMaxBytes: number;
 }) => {
-  const { store, results, cacheArtifact } = deps;
+  const { store, results, cacheArtifact, copyMaxBytes } = deps;
 
   const filesUnder = Effect.fn("Ingest.filesUnder")(function* (prefix: string) {
     const keys = yield* store.list(prefix);
@@ -66,6 +68,7 @@ export const makeIngestArtifact = (deps: {
     artifact: ArtifactMeta,
     acc: { reports: number; inserted: number; cached: number },
   ) {
+    if (copyMaxBytes > 0 && artifact.sizeBytes > copyMaxBytes) return { files: [], reports: 0 };
     const { prefix, fetched } = yield* cacheArtifact(artifact);
     if (fetched) acc.cached++;
     const files = yield* filesUnder(prefix);

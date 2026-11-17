@@ -32,7 +32,8 @@ than setting them to empty strings.
 | `SESSION_SECRET` | `dev-only-secret` | Signs sessions, artifact handoffs and install state. Set a private value for deployment. |
 | `PORT` | `3000` | Dashboard and API port. |
 | `ARTIFACT_PORT` | `3001` | Artifact server port. |
-| `ARTIFACT_COPY_POLICY` | `copy` | `copy` caches artifacts at ingest; `on-view` defers the copy until viewed. Other values mean `copy`. |
+| `ARTIFACT_COPY_POLICY` | `copy` | `copy` caches artifacts at ingest; `on-view` defers the copy until viewed. Other values mean `copy`. Ingest does not read it yet; use `ARTIFACT_COPY_MAX_MB`. |
+| `ARTIFACT_COPY_MAX_MB` | `0` | Ingest skips the download of a larger artifact. It stays listed, and its first view fetches it. `0` copies every artifact. |
 | `ARTIFACT_RETENTION_DAYS` | `90` | Age window for cached artifacts. `0` disables the sweep; negative values are clamped to zero. |
 | `GITHUB_WEBHOOK_SECRET` | Unset | The App's webhook secret. Unset or empty, `POST /api/webhooks/github` answers 404. |
 | `INGEST_POLL_MINUTES` | `10` | Minutes between backstop ingest passes. `0` disables the poll; negative values are clamped to zero. |
