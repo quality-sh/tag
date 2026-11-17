@@ -11,6 +11,7 @@ import { Installation } from "./server/installation.ts";
 import { Ingest } from "./server/ingest.ts";
 import { Retention } from "./server/retention.ts";
 import { Auth } from "./server/auth.ts";
+import { Oidc } from "./server/oidc.ts";
 import { App } from "./server/http.ts";
 import { ArtifactApp } from "./server/artifact-server.ts";
 
@@ -35,8 +36,12 @@ const SourceLayer = Layer.unwrap(
 );
 
 // Built bottom-up: ingest needs the result store, which needs the artifact store; the
-// stores, the source and auth all need the config. provideMerge keeps every service visible.
-const Services = Layer.mergeAll(Ingest.layer, Retention.layer).pipe(
+// stores, the source and auth all need the config; OIDC needs auth. provideMerge keeps every service visible.
+const Services = Layer.mergeAll(
+  Ingest.layer,
+  Retention.layer,
+  Oidc.layer.pipe(Layer.provide(FetchHttpClient.layer)),
+).pipe(
   Layer.provideMerge(results),
   Layer.provideMerge(Layer.mergeAll(store, SourceLayer, Auth.layer, installation)),
   Layer.provideMerge(AppConfig.layer),

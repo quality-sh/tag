@@ -57,7 +57,7 @@ function App() {
       <Empty>TAG is not reachable: {String(Cause.squash(session.cause))}</Empty>
     ) : null;
   const authed = session.value.authenticated || !session.value.authRequired;
-  if (!authed) return <LoginPage />;
+  if (!authed) return <LoginPage session={session.value} />;
   if (deciding) return <FirstLoad session={session.value} onDone={() => setDeciding(false)} />;
   switch (route.page) {
     case "onboarding":

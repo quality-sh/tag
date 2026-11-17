@@ -1,22 +1,42 @@
-// Auth and session routes: the session probe, login, logout, and the GitHub App handshake.
-import { Effect, Option, Schema } from "effect";
+// Auth and session routes: the session probe, password and OIDC login, logout, and the
+// GitHub App handshake.
+import { Effect, Option, Result, Schema } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import type { Scope } from "effect";
 import { AppConfig } from "./config.ts";
 import { Auth, SESSION_COOKIE } from "./auth.ts";
 import { Installation } from "./installation.ts";
+import { FLOW_COOKIE, FLOW_TTL_MS, Oidc } from "./oidc.ts";
 import type { Ingest } from "./ingest.ts";
 import { json, query } from "./http-helpers.ts";
 import { WEBHOOK_PATH } from "./http-webhook-routes.ts";
 
+export const OIDC_START_PATH = "/api/auth/oidc/start";
+export const OIDC_CALLBACK_PATH = "/api/auth/oidc/callback";
+
 // GitHub posts the webhook with no session; its signature stands in for one.
-const PUBLIC_PATHS = new Set(["/api/health", "/api/login", "/api/session", WEBHOOK_PATH]);
+const PUBLIC_PATHS = new Set([
+  "/api/health",
+  "/api/login",
+  "/api/session",
+  OIDC_START_PATH,
+  OIDC_CALLBACK_PATH,
+  WEBHOOK_PATH,
+]);
+
+const SESSION_SECONDS = 7 * 24 * 3600;
 
 const cookieOptions = (maxAgeSeconds: number) => ({
   httpOnly: true,
   sameSite: "lax" as const,
   path: "/",
   maxAge: `${maxAgeSeconds} seconds` as const,
+});
+
+// The flow cookie only ever goes back to the callback.
+const flowCookieOptions = (maxAgeSeconds: number) => ({
+  ...cookieOptions(maxAgeSeconds),
+  path: "/api/auth/oidc",
 });
 
 const LoginBody = Schema.Struct({ password: Schema.String });
@@ -45,6 +65,7 @@ export const addAuthRoutes = (deps: {
 }) =>
   Effect.gen(function* () {
     const { router, auth, installation, ingest, cfg, background } = deps;
+    const oidc = yield* Oidc.Service;
     /** The App install link; App credentials plus the slug from GITHUB_APP_SLUG. */
     const installUrl = Option.flatMap(cfg.github, (g) =>
       g.auth._tag === "app"
@@ -57,9 +78,14 @@ export const addAuthRoutes = (deps: {
     yield* router.add("GET", "/api/session", (req) =>
       Effect.gen(function* () {
         const installed = Option.isSome(yield* installation.current());
+        const token = req.cookies[SESSION_COOKIE];
+        const email = auth.sessionEmail(token);
         return json({
-          authenticated: auth.verifySession(req.cookies[SESSION_COOKIE]),
+          authenticated: auth.verifySession(token),
           authRequired: auth.enabled,
+          passwordLogin: auth.passwordEnabled,
+          ...(Option.isSome(oidc.providerName) ? { oidcProvider: oidc.providerName.value } : {}),
+          ...(email !== undefined ? { email } : {}),
           ...(Option.isSome(installUrl) && !installed ? { installUrl: "/api/install" } : {}),
         });
       }),
@@ -75,7 +101,7 @@ export const addAuthRoutes = (deps: {
         return yield* HttpServerResponse.setCookie(
           SESSION_COOKIE,
           auth.issueSession(),
-          cookieOptions(7 * 24 * 3600),
+          cookieOptions(SESSION_SECONDS),
         )(json({ ok: true })).pipe(Effect.orDie);
       }),
     );
@@ -88,6 +114,57 @@ export const addAuthRoutes = (deps: {
         "",
         cookieOptions(0),
       )(json({ ok: true })).pipe(Effect.orDie),
+    );
+
+    /** Send the viewer to the OIDC provider, with the flow's secrets in a sealed cookie. */
+    yield* router.add("GET", OIDC_START_PATH, () =>
+      Option.isNone(oidc.providerName)
+        ? Effect.succeed(json({ error: "OIDC login is not configured" }, 404))
+        : oidc.start().pipe(
+            Effect.flatMap(({ url, flow }) =>
+              HttpServerResponse.setCookie(
+                FLOW_COOKIE,
+                flow,
+                flowCookieOptions(FLOW_TTL_MS / 1000),
+              )(HttpServerResponse.redirect(url)).pipe(Effect.orDie),
+            ),
+            Effect.catchTag("Oidc.OidcError", (e) =>
+              Effect.logWarning(`oidc start: ${e.detail}`).pipe(
+                Effect.as(HttpServerResponse.redirect(`/?login_error=${e.reason}`)),
+              ),
+            ),
+          ),
+    );
+
+    /** The provider sends the viewer back here; a verified, allowed email opens a session. */
+    yield* router.add("GET", OIDC_CALLBACK_PATH, (req) =>
+      Effect.gen(function* () {
+        const q = query(req);
+        const email = yield* oidc
+          .finish({
+            code: q.get("code"),
+            state: q.get("state"),
+            error: q.get("error"),
+            flow: req.cookies[FLOW_COOKIE],
+          })
+          .pipe(
+            Effect.tapError((e) => Effect.logWarning(`oidc callback: ${e.reason}: ${e.detail}`)),
+            Effect.result,
+          );
+        const cookies: Array<readonly [string, string, ReturnType<typeof cookieOptions>]> = [
+          [FLOW_COOKIE, "", flowCookieOptions(0)],
+        ];
+        if (Result.isSuccess(email))
+          cookies.push([
+            SESSION_COOKIE,
+            auth.issueSession(email.success),
+            cookieOptions(SESSION_SECONDS),
+          ]);
+        const location = Result.isSuccess(email) ? "/" : `/?login_error=${email.failure.reason}`;
+        return yield* HttpServerResponse.setCookies(cookies)(
+          HttpServerResponse.redirect(location),
+        ).pipe(Effect.orDie);
+      }),
     );
 
     /** Send the admin to GitHub to pick repositories, with a signed state to come back to. */
